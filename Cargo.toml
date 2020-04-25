@@ -6,6 +6,9 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[dependencies]
+cursive_tree_view = "0.6"
+
 [dependencies.cursive]
 version = "0.14"
 default-features = false
