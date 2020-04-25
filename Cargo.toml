@@ -8,6 +8,8 @@ edition = "2018"
 
 [dependencies]
 cursive_tree_view = "0.6"
+cursive_table_view = "0.12"
+rand = "*"
 
 [dependencies.cursive]
 version = "0.14"

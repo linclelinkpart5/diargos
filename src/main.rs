@@ -1,109 +1,113 @@
 use std::cmp::Ordering;
-use std::path::Path;
-use std::path::PathBuf;
 
 use cursive::Cursive;
-use cursive::traits::Nameable;
+use cursive::align::HAlign;
+use cursive::traits::*;
 use cursive::views::Dialog;
-use cursive_tree_view::Placement;
-use cursive_tree_view::TreeView;
+use cursive::views::TextView;
+use cursive_table_view::TableView;
+use cursive_table_view::TableViewItem;
+use rand::Rng;
 
-#[derive(Debug)]
-struct TreeEntry {
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+enum BasicColumn {
+    Name,
+    Count,
+    Rate,
+}
+
+impl BasicColumn {
+    fn as_str(&self) -> &str {
+        match *self {
+            BasicColumn::Name => "Name",
+            BasicColumn::Count => "Count",
+            BasicColumn::Rate => "Rate",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Foo {
     name: String,
-    dir: Option<PathBuf>,
+    count: usize,
+    rate: usize,
 }
 
-impl std::fmt::Display for TreeEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.name)
-    }
-}
-
-fn collect_entries(dir: &Path, entries: &mut Vec<TreeEntry>) -> std::io::Result<()> {
-    let metadata = std::fs::metadata(&dir)?;
-
-    if metadata.is_dir() {
-        for entry_res in std::fs::read_dir(dir)? {
-            let entry = entry_res?;
-
-            let sub_name = entry.file_name();
-            let sub_path = dir.join(&sub_name);
-
-            let sub_metadata = std::fs::metadata(&sub_path)?;
-
-            let sub_dir =
-                if sub_metadata.is_dir() { Some(sub_path) }
-                else if sub_metadata.is_file() { None }
-                else { continue; }
-            ;
-
-            entries.push(
-                TreeEntry {
-                    name: sub_name.to_string_lossy().into_owned(),
-                    dir: sub_dir,
-                }
-            );
+impl TableViewItem<BasicColumn> for Foo {
+    fn to_column(&self, column: BasicColumn) -> String {
+        match column {
+            BasicColumn::Name => self.name.to_string(),
+            BasicColumn::Count => format!("{}", self.count),
+            BasicColumn::Rate => format!("{}", self.rate),
         }
     }
 
-    Ok(())
-}
-
-fn expand_tree(tree: &mut TreeView<TreeEntry>, parent_row: usize, dir: &Path) {
-    let mut entries = Vec::new();
-
-    collect_entries(dir, &mut entries).ok();
-
-    entries.sort_by(|a, b| {
-        // Directories always go at the top.
-        match (a.dir.is_some(), b.dir.is_some()) {
-            (true, true) | (false, false) => a.name.cmp(&b.name),
-            (true, false) => Ordering::Less,
-            (false, true) => Ordering::Greater,
-        }
-    });
-
-    for i in entries {
-        if i.dir.is_some() {
-            tree.insert_container_item(i, Placement::LastChild, parent_row);
-        }
-        else {
-            tree.insert_item(i, Placement::LastChild, parent_row);
+    fn cmp(&self, other: &Self, column: BasicColumn) -> Ordering
+    where
+        Self: Sized,
+    {
+        match column {
+            BasicColumn::Name => self.name.cmp(&other.name),
+            BasicColumn::Count => self.count.cmp(&other.count),
+            BasicColumn::Rate => self.rate.cmp(&other.rate),
         }
     }
 }
 
 fn main() {
-    // Create TreeView with initial working directory
-    let mut tree = TreeView::<TreeEntry>::new();
-    let path = std::env::current_dir().expect("Working directory missing.");
+    let mut rng = rand::thread_rng();
 
-    tree.insert_item(
-        TreeEntry {
-            name: path.file_name().unwrap().to_str().unwrap().to_string(),
-            dir: Some(path.clone()),
-        },
-        Placement::After,
-        0,
-    );
+    let mut siv = Cursive::default();
+    let mut table = TableView::<Foo, BasicColumn>::new()
+        .column(BasicColumn::Name, "Name", |c| c.width_percent(20))
+        .column(BasicColumn::Count, "Count", |c| c.align(HAlign::Center))
+        .column(BasicColumn::Rate, "Rate", |c| {
+            c.ordering(Ordering::Greater)
+                .align(HAlign::Right)
+                .width_percent(20)
+        });
 
-    expand_tree(&mut tree, 0, &path);
+    let mut items = Vec::new();
+    for i in 0..50 {
+        items.push(Foo {
+            name: format!("Name {}", i),
+            count: rng.gen_range(0, 255),
+            rate: rng.gen_range(0, 255),
+        });
+    }
 
-    // Lazily insert directory listings for sub nodes
-    tree.set_on_collapse(|siv: &mut Cursive, row, is_collapsed, children| {
-        if !is_collapsed && children == 0 {
-            siv.call_on_name("tree", move |tree: &mut TreeView<TreeEntry>| {
-                if let Some(dir) = tree.borrow_item(row).unwrap().dir.clone() {
-                    expand_tree(tree, row, &dir);
-                }
-            });
-        }
+    table.set_items(items);
+
+    table.set_on_sort(|siv: &mut Cursive, column: BasicColumn, order: Ordering| {
+        siv.add_layer(
+            Dialog::around(TextView::new(format!("{} / {:?}", column.as_str(), order)))
+                .title("Sorted by")
+                .button("Close", |s| {
+                    s.pop_layer();
+                }),
+        );
     });
 
-    // Setup Cursive
-    let mut siv = Cursive::default();
-    siv.add_layer(Dialog::around(tree.with_name("tree")).title("File View"));
+    table.set_on_submit(|siv: &mut Cursive, row: usize, index: usize| {
+        let value = siv
+            .call_on_name("table", move |table: &mut TableView<Foo, BasicColumn>| {
+                format!("{:?}", table.borrow_item(index).unwrap())
+            })
+            .unwrap();
+
+        siv.add_layer(
+            Dialog::around(TextView::new(value))
+                .title(format!("Removing row # {}", row))
+                .button("Close", move |s| {
+                    s.call_on_name("table", |table: &mut TableView<Foo, BasicColumn>| {
+                        table.remove_item(index);
+                    });
+                    s.pop_layer();
+                }),
+        );
+    });
+
+    siv.add_layer(Dialog::around(table.with_name("table").min_size((50, 20))).title("Table View"));
 
     siv.run();
 }
