@@ -10,6 +10,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.3.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8fd72866655d1904d6b0997d0b07ba561047d070fbe29de039031c641b61217"
+dependencies = [
+ "const-random",
+]
+
+[[package]]
 name = "arc-swap"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -91,19 +100,60 @@ version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "341b03eec276c30c6cdc640d8bd8c08eac9605064c3f9c4838f958dac06973bb"
 dependencies = [
- "ahash",
+ "ahash 0.2.18",
  "cfg-if",
  "chrono",
  "crossbeam-channel",
  "enum-map",
- "enumset",
+ "enumset 0.4.5",
  "lazy_static",
  "libc",
  "log",
  "num",
  "owning_ref",
  "signal-hook",
+ "unicode-segmentation",
+ "unicode-width",
+ "xi-unicode",
+]
+
+[[package]]
+name = "cursive"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a9f12332ab2bca26979ef00cfef9a1c2e287db03b787a83d892ad9961f81374"
+dependencies = [
+ "ahash 0.3.8",
+ "cfg-if",
+ "crossbeam-channel",
+ "cursive_core",
+ "enumset 1.0.0",
+ "lazy_static",
+ "libc",
+ "log",
+ "signal-hook",
  "termion",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
+name = "cursive_core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fe232694c965c211d5fbd8111ae89a5939b7b169cefcac4f8b6f83dde889e10"
+dependencies = [
+ "ahash 0.3.8",
+ "chrono",
+ "crossbeam-channel",
+ "enum-map",
+ "enumset 1.0.0",
+ "lazy_static",
+ "libc",
+ "log",
+ "num",
+ "owning_ref",
+ "signal-hook",
  "unicode-segmentation",
  "unicode-width",
  "xi-unicode",
@@ -115,7 +165,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "231e0067bf17e5702474bd3039d6d9d6fb8cb552f6ae333db69cf4f89fc941fb"
 dependencies = [
- "cursive",
+ "cursive 0.14.0",
 ]
 
 [[package]]
@@ -124,7 +174,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d2b558e2e0892af8d028cc0ea5842113d83d3f139f38dff719ca1a48018cfa4"
 dependencies = [
- "cursive",
+ "cursive 0.14.0",
  "debug_stub_derive",
 ]
 
@@ -177,9 +227,10 @@ dependencies = [
 name = "diargos"
 version = "0.1.0"
 dependencies = [
- "cursive",
+ "cursive 0.15.0",
  "cursive_table_view",
  "cursive_tree_view",
+ "indexmap",
  "rand",
 ]
 
@@ -210,7 +261,17 @@ version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93182dcb6530c757e5879b22ebc5cfbd034861585b442819389614e223ac1c47"
 dependencies = [
- "enumset_derive",
+ "enumset_derive 0.4.4",
+ "num-traits",
+]
+
+[[package]]
+name = "enumset"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3691ce759534316ad900d57dd8e688e2c4263f9750c0f7c1e9b9a4516d4ca241"
+dependencies = [
+ "enumset_derive 0.5.0",
  "num-traits",
 ]
 
@@ -219,6 +280,18 @@ name = "enumset_derive"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "751a786cfcc7d5ceb9e0fe06f0e911da6ce3a3044633e029df4c370193c86a62"
+dependencies = [
+ "darling",
+ "proc-macro2",
+ "quote 1.0.3",
+ "syn 1.0.18",
+]
+
+[[package]]
+name = "enumset_derive"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74bef436ac71820c5cf768d7af9ba33121246b09a00e09a55d94ef8095a875ac"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -248,6 +321,15 @@ name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
+
+[[package]]
+name = "indexmap"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c398b2b113b55809ceb9ee3e753fcbac793f1956663f3c36549c1346015c2afe"
+dependencies = [
+ "autocfg",
+]
 
 [[package]]
 name = "lazy_static"

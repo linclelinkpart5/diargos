@@ -1,17 +1,18 @@
 [package]
 name = "diargos"
 version = "0.1.0"
-authors = ["Mark LeMoine <thatsgobbles@gmail.com>"]
+authors = ["Mark LeMoine <linclelinkpart5@gmail.com>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+indexmap = "1.4"
 cursive_tree_view = "0.6"
 cursive_table_view = "0.12"
 rand = "*"
 
 [dependencies.cursive]
-version = "0.14"
+version = "0.15"
 default-features = false
 features = ["termion-backend"]
