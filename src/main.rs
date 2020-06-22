@@ -4,17 +4,24 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use indexmap::IndexMap;
+use indexmap::indexmap;
+use maplit::hashmap;
+use str_macro::str;
 
 use cursive::Cursive;
+use cursive::CursiveExt;
 use cursive::Printer;
 use cursive::align::HAlign;
 use cursive::direction::Direction;
 use cursive::event::Event;
 use cursive::event::EventResult;
 use cursive::theme::ColorStyle;
+use cursive::traits::Nameable;
+use cursive::traits::Resizable;
 use cursive::vec::Vec2;
 use cursive::view::ScrollBase;
 use cursive::view::View;
+use cursive::views::Dialog;
 
 pub type Record = HashMap<String, String>;
 
@@ -26,14 +33,14 @@ pub struct ColumnDef {
     /// accomodate the header display.
     pub desired_width: usize,
 
-    /// Horizontal alignment of the header for this column.
-    pub header_align: HAlign,
+    // /// Horizontal alignment of the header for this column.
+    // pub header_align: HAlign,
 
-    /// Horizontal alignment of the data for this column.
-    pub data_align: HAlign,
+    // /// Horizontal alignment of the data for this column.
+    // pub data_align: HAlign,
 
-    /// Flags if this column has been selected.
-    pub selected: bool,
+    // /// Flags if this column has been selected.
+    // pub selected: bool,
 }
 
 /// Callback for when a column is sorted. Takes the column and ordering as input.
@@ -91,12 +98,7 @@ impl SpreadsheetView {
 }
 
 impl SpreadsheetView {
-    pub fn draw_column<C>(&self, column: &str, printer: &Printer) -> Option<usize>
-    where
-        C: Fn(&Printer, &str)
-    {
-        let column_def = self.columns.get(column)?;
-
+    pub fn draw_column(&self, column: &str, column_def: &ColumnDef, printer: &Printer) -> usize {
         // Actually want number of grapheme clusters, but this will do for now.
         // TODO: Look into the `unicode-segmentation` crate.
         let header_width = column.chars().count();
@@ -126,64 +128,69 @@ impl SpreadsheetView {
             };
         }
 
-        Some(column_width)
+        // Return the actual width this column took.
+        column_width
+    }
+}
+
+impl View for SpreadsheetView {
+    fn draw(&self, printer: &Printer) {
+        let mut column_offset = 0;
+
+        for (column, column_def) in self.columns.iter() {
+            printer.print_vline((column_offset, 0), 100, "|");
+
+            column_offset += 2;
+
+            let width_used = self.draw_column(column, column_def, &printer.offset((column_offset, 0)));
+
+            // Keep track of the width the last column took.
+            column_offset += width_used + 1;
+        }
+
+        printer.print_vline((column_offset, 0), 100, "|");
     }
 }
 
 fn main() {
-    // let mut rng = rand::thread_rng();
+    let ssv = SpreadsheetView {
+        columns: indexmap! {
+            str!("name") => ColumnDef {
+                title: str!("Name"),
+                desired_width: 10,
+            },
+            str!("age") => ColumnDef {
+                title: str!("Age"),
+                desired_width: 10,
+            },
+            str!("fave_food") => ColumnDef {
+                title: str!("Favorite Food"),
+                desired_width: 10,
+            },
+        },
+        records: vec![
+            hashmap! {
+                str!("name") => str!("Mark LeMoine"),
+                str!("age") => str!("32"),
+                str!("fave_food") => str!("tacos"),
+            },
+            hashmap! {
+                str!("name") => str!("Susanne Barajas"),
+                str!("age") => str!("27"),
+                str!("fave_food") => str!("chicken lettuce wraps"),
+            },
+            hashmap! {
+                str!("name") => str!("Leopoldo Marquez"),
+                str!("age") => str!("29"),
+                str!("fave_food") => str!("steak"),
+            },
+        ],
+        ..Default::default()
+    };
 
-    // let mut siv = Cursive::default();
-    // let mut table = TableView::<Foo, BasicColumn>::new()
-    //     .column(BasicColumn::Name, "Name", |c| c.width_percent(20))
-    //     .column(BasicColumn::Count, "Count", |c| c.align(HAlign::Center))
-    //     .column(BasicColumn::Rate, "Rate", |c| {
-    //         c.ordering(Ordering::Greater)
-    //             .align(HAlign::Right)
-    //             .width_percent(20)
-    //     });
+    let mut siv = Cursive::default();
 
-    // let mut items = Vec::new();
-    // for i in 0..50 {
-    //     items.push(Foo {
-    //         name: format!("Name {}", i),
-    //         count: rng.gen_range(0, 255),
-    //         rate: rng.gen_range(0, 255),
-    //     });
-    // }
+    siv.add_layer(Dialog::around(ssv.with_name("table").min_size((50, 20))).title("Tag View"));
 
-    // table.set_items(items);
-
-    // table.set_on_sort(|siv: &mut Cursive, column: BasicColumn, order: Ordering| {
-    //     siv.add_layer(
-    //         Dialog::around(TextView::new(format!("{} / {:?}", column.as_str(), order)))
-    //             .title("Sorted by")
-    //             .button("Close", |s| {
-    //                 s.pop_layer();
-    //             }),
-    //     );
-    // });
-
-    // table.set_on_submit(|siv: &mut Cursive, row: usize, index: usize| {
-    //     let value = siv
-    //         .call_on_name("table", move |table: &mut TableView<Foo, BasicColumn>| {
-    //             format!("{:?}", table.borrow_item(index).unwrap())
-    //         })
-    //         .unwrap();
-
-    //     siv.add_layer(
-    //         Dialog::around(TextView::new(value))
-    //             .title(format!("Removing row # {}", row))
-    //             .button("Close", move |s| {
-    //                 s.call_on_name("table", |table: &mut TableView<Foo, BasicColumn>| {
-    //                     table.remove_item(index);
-    //                 });
-    //                 s.pop_layer();
-    //             }),
-    //     );
-    // });
-
-    // siv.add_layer(Dialog::around(table.with_name("table").min_size((50, 20))).title("Table View"));
-
-    // siv.run();
+    siv.run();
 }
