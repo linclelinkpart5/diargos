@@ -109,7 +109,6 @@ impl SpreadsheetView {
         let header_width = column.chars().count();
         let desired_width = column_def.desired_width;
 
-        // This will need to change for Unicode text, but it will do for now.
         let column_width = Ord::max(desired_width, header_width);
 
         if column_width > 0 {
@@ -124,18 +123,18 @@ impl SpreadsheetView {
                         })
                     },
                     Some(field) => {
-                        let mut char_indices = field.char_indices();
-
                         // Skip the number of characters needed to show a truncated view.
-                        let (display, _was_trunc) = match char_indices.by_ref().skip(column_width).next() {
-                            // The number of characters in the string is less than or equal to
-                            // the truncated column width. Just show it as-is, with no ellipsis.
-                            None => (&field[..], false),
+                        let (display, _was_trunc) =
+                            match field.char_indices().skip(column_width).next() {
+                                // The number of characters in the string is less than or equal to
+                                // the truncated column width. Just show it as-is, with no ellipsis.
+                                None => (&field[..], false),
 
-                            // The number of characters in the string is greater than the
-                            // truncated column width. Slice the string to that point.
-                            Some((trunc_pos, _)) => (&field[..trunc_pos], true),
-                        };
+                                // The number of characters in the string is greater than the
+                                // truncated column width. Slice the string to that point.
+                                Some((trunc_pos, _)) => (&field[..trunc_pos], true),
+                            }
+                        ;
 
                         sub_printer.print((0, 0), display);
                     },
