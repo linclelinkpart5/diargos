@@ -23,6 +23,11 @@ use cursive::view::ScrollBase;
 use cursive::view::View;
 use cursive::views::Dialog;
 
+const ELLIPSIS_STR:& str = "⋯";
+const ELLIPSIS_STR_WIDTH: usize = 1;
+
+const MISSING_STR: &str = "x";
+
 pub type Record = HashMap<String, String>;
 
 pub struct ColumnDef {
@@ -107,25 +112,56 @@ impl SpreadsheetView {
         // This will need to change for Unicode text, but it will do for now.
         let column_width = Ord::max(desired_width, header_width);
 
-        for (row_offset, record) in self.records.iter().enumerate() {
-            let sub_printer = &printer.offset((0, row_offset)).focused(true);
+        if column_width > 0 {
+            for (row_offset, record) in self.records.iter().enumerate() {
+                let sub_printer = &printer.offset((0, row_offset)).focused(true);
 
-            // See if this record has the target column.
-            match record.get(column) {
-                None => {
-                    sub_printer.with_color(ColorStyle::highlight(), |pr| {
-                        pr.print_hline((0, 0), column_width, "X");
-                    })
-                },
-                Some(field) => {
-                    let trunc_field = match field.char_indices().skip(column_width).next() {
-                        Some((pos, _)) => &field[..pos],
-                        None => &field,
-                    };
+                // See if this record has the target column.
+                match record.get(column) {
+                    None => {
+                        sub_printer.with_color(ColorStyle::highlight(), |pr| {
+                            pr.print_hline((0, 0), column_width, MISSING_STR);
+                        })
+                    },
+                    Some(field) => {
+                        if column_width >= ELLIPSIS_STR_WIDTH {
+                            let trunc_width = column_width - ELLIPSIS_STR_WIDTH;
 
-                    sub_printer.print((0, 0), trunc_field);
-                },
-            };
+                            let mut char_indices = field.char_indices();
+
+                            // Skip the number of characters needed to show a truncated view.
+                            let (display, show_ellipsis) = match char_indices.by_ref().skip(trunc_width).peekable().peek() {
+                                // The number of characters in the string is less than or equal to
+                                // the truncated column width. Just show it as-is, with no ellipsis.
+                                None => (&field[..], false),
+
+                                // The number of characters in the string is greater than the
+                                // truncated column width. Check to see how that number compares to
+                                // the non-truncated column width.
+                                Some(&(trunc_pos, _)) => {
+                                    // Skip the number of characters in the ellipsis.
+                                    match char_indices.by_ref().skip(ELLIPSIS_STR_WIDTH).peekable().peek() {
+                                        // The string will fit in the full column width.
+                                        // Just show as-is, with no ellipsis.
+                                        None => (&field[..], false),
+
+                                        // There are characters left that will not fit in the column.
+                                        // Return a slice of the string, with enough room left over
+                                        // to include an ellipsis.
+                                        Some(..) => (&field[..trunc_pos], true),
+                                    }
+                                },
+                            };
+
+                            if show_ellipsis {
+                                sub_printer.print_hline((0, 0), column_width, ELLIPSIS_STR);
+                            }
+
+                            sub_printer.print((0, 0), display);
+                        }
+                    },
+                };
+            }
         }
 
         // Return the actual width this column took.
@@ -137,18 +173,17 @@ impl View for SpreadsheetView {
     fn draw(&self, printer: &Printer) {
         let mut column_offset = 0;
 
-        for (column, column_def) in self.columns.iter() {
-            printer.print_vline((column_offset, 0), 100, "|");
-
-            column_offset += 2;
+        for (i, (column, column_def)) in self.columns.iter().enumerate() {
+            if i > 0 {
+                printer.print_vline((column_offset, 0), 100, "│");
+                column_offset += 2;
+            }
 
             let width_used = self.draw_column(column, column_def, &printer.offset((column_offset, 0)));
 
             // Keep track of the width the last column took.
             column_offset += width_used + 1;
         }
-
-        printer.print_vline((column_offset, 0), 100, "|");
     }
 }
 
@@ -165,7 +200,7 @@ fn main() {
             },
             str!("fave_food") => ColumnDef {
                 title: str!("Favorite Food"),
-                desired_width: 10,
+                desired_width: 40,
             },
         },
         records: vec![
@@ -182,7 +217,7 @@ fn main() {
             hashmap! {
                 str!("name") => str!("Leopoldo Marquez"),
                 str!("age") => str!("29"),
-                str!("fave_food") => str!("steak"),
+                // str!("fave_food") => str!("steak"),
             },
         ],
         ..Default::default()
