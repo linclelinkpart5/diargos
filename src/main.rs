@@ -23,8 +23,8 @@ use cursive::view::ScrollBase;
 use cursive::view::View;
 use cursive::views::Dialog;
 
-const ELLIPSIS_STR:& str = "⋯";
-const ELLIPSIS_STR_WIDTH: usize = 1;
+// const ELLIPSIS_STR:& str = "⋯";
+// const ELLIPSIS_STR_WIDTH: usize = 1;
 
 const MISSING_STR: &str = "x";
 
@@ -124,41 +124,20 @@ impl SpreadsheetView {
                         })
                     },
                     Some(field) => {
-                        if column_width >= ELLIPSIS_STR_WIDTH {
-                            let trunc_width = column_width - ELLIPSIS_STR_WIDTH;
+                        let mut char_indices = field.char_indices();
 
-                            let mut char_indices = field.char_indices();
+                        // Skip the number of characters needed to show a truncated view.
+                        let (display, _was_trunc) = match char_indices.by_ref().skip(column_width).next() {
+                            // The number of characters in the string is less than or equal to
+                            // the truncated column width. Just show it as-is, with no ellipsis.
+                            None => (&field[..], false),
 
-                            // Skip the number of characters needed to show a truncated view.
-                            let (display, show_ellipsis) = match char_indices.by_ref().skip(trunc_width).peekable().peek() {
-                                // The number of characters in the string is less than or equal to
-                                // the truncated column width. Just show it as-is, with no ellipsis.
-                                None => (&field[..], false),
+                            // The number of characters in the string is greater than the
+                            // truncated column width. Slice the string to that point.
+                            Some((trunc_pos, _)) => (&field[..trunc_pos], true),
+                        };
 
-                                // The number of characters in the string is greater than the
-                                // truncated column width. Check to see how that number compares to
-                                // the non-truncated column width.
-                                Some(&(trunc_pos, _)) => {
-                                    // Skip the number of characters in the ellipsis.
-                                    match char_indices.by_ref().skip(ELLIPSIS_STR_WIDTH).peekable().peek() {
-                                        // The string will fit in the full column width.
-                                        // Just show as-is, with no ellipsis.
-                                        None => (&field[..], false),
-
-                                        // There are characters left that will not fit in the column.
-                                        // Return a slice of the string, with enough room left over
-                                        // to include an ellipsis.
-                                        Some(..) => (&field[..trunc_pos], true),
-                                    }
-                                },
-                            };
-
-                            if show_ellipsis {
-                                sub_printer.print_hline((0, 0), column_width, ELLIPSIS_STR);
-                            }
-
-                            sub_printer.print((0, 0), display);
-                        }
+                        sub_printer.print((0, 0), display);
                     },
                 };
             }
