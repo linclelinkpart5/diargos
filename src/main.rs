@@ -29,6 +29,10 @@ const ELLIPSIS_STR_WIDTH: usize = 1;
 
 const MISSING_STR: &str = "╳";
 
+fn width(s: &str) -> usize {
+    s.char_indices().count()
+}
+
 pub type Record = HashMap<String, String>;
 
 pub struct ColumnDef {
@@ -62,7 +66,11 @@ pub struct TagRecordView {
 }
 
 impl TagRecordView {
-    pub fn new(records: Vec<Record>) -> Self {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_records(records: Vec<Record>) -> Self {
         Self {
             records,
             ..Default::default()
@@ -81,6 +89,60 @@ impl TagRecordView {
         self.records.as_mut_slice()
     }
 
+    fn get_max_width_for_column(&self, column_key: &str) -> usize {
+        let mut max_seen = 0;
+
+        for record in self.records.iter() {
+            let curr_row_width = record.get(column_key).map(|s| s.char_indices().count()).unwrap_or(0);
+            max_seen = max_seen.max(curr_row_width);
+        }
+
+        max_seen
+    }
+
+    fn print_display_str(printer: &Printer, original_str: &str, display_width: usize) {
+        // If there is not enough room to even print an ellipsis, just return.
+        if display_width < ELLIPSIS_STR_WIDTH {
+            return
+        }
+
+        let trunc_width = display_width - ELLIPSIS_STR_WIDTH;
+
+        let mut char_indices = original_str.char_indices();
+
+        // Skip the number of characters needed to show a truncated view.
+        let (display_str, show_ellipsis) =
+            match char_indices.by_ref().skip(trunc_width).peekable().peek() {
+                // The number of characters in the string is less than or equal to
+                // the truncated column width. Just show it as-is, with no ellipsis.
+                None => (&original_str[..], false),
+
+                // The number of characters in the string is greater than the
+                // truncated column width. Check to see how that number compares to
+                // the non-truncated column width.
+                Some(&(trunc_pos, _)) => {
+                    // Skip the number of characters in the ellipsis.
+                    match char_indices.by_ref().skip(ELLIPSIS_STR_WIDTH).next() {
+                        // The string will fit in the full column width.
+                        // Just show as-is, with no ellipsis.
+                        None => (&original_str[..], false),
+
+                        // There are characters left that will not fit in the column.
+                        // Return a slice of the string, with enough room left over
+                        // to include an ellipsis.
+                        Some(..) => (&original_str[..trunc_pos], true),
+                    }
+                },
+            }
+        ;
+
+        if show_ellipsis {
+            printer.print_hline((0, 0), display_width, ELLIPSIS_STR);
+        }
+
+        printer.print((0, 0), display_str);
+    }
+
     /// Draws the contents of a column, by field.
     /// The `Printer` should be configured to begin printing at the correct starting position.
     fn draw_column(&self, printer: &Printer, field_key: &str, display_width: usize) {
@@ -88,54 +150,22 @@ impl TagRecordView {
             return;
         }
 
-        for (row_offset, record) in self.records.iter().enumerate() {
+        self.scroll_base.draw(printer, |printer, i| {
+            let record = &self.records[i];
+
             // See if this record contains the given field.
             match record.get(field_key) {
                 None => {
                     // Print out a highlighted sentinel, to indicate a missing value.
                     printer.with_color(ColorStyle::highlight_inactive(), |pr| {
-                        pr.print_hline((0, row_offset), display_width, MISSING_STR);
+                        pr.print_hline((0, 0), display_width, MISSING_STR);
                     })
                 },
                 Some(field) => {
-                    if display_width >= ELLIPSIS_STR_WIDTH {
-                        let trunc_width = display_width - ELLIPSIS_STR_WIDTH;
-
-                        let mut char_indices = field.char_indices();
-
-                        // Skip the number of characters needed to show a truncated view.
-                        let (display, show_ellipsis) = match char_indices.by_ref().skip(trunc_width).peekable().peek() {
-                            // The number of characters in the string is less than or equal to
-                            // the truncated column width. Just show it as-is, with no ellipsis.
-                            None => (&field[..], false),
-
-                            // The number of characters in the string is greater than the
-                            // truncated column width. Check to see how that number compares to
-                            // the non-truncated column width.
-                            Some(&(trunc_pos, _)) => {
-                                // Skip the number of characters in the ellipsis.
-                                match char_indices.by_ref().skip(ELLIPSIS_STR_WIDTH).peekable().peek() {
-                                    // The string will fit in the full column width.
-                                    // Just show as-is, with no ellipsis.
-                                    None => (&field[..], false),
-
-                                    // There are characters left that will not fit in the column.
-                                    // Return a slice of the string, with enough room left over
-                                    // to include an ellipsis.
-                                    Some(..) => (&field[..trunc_pos], true),
-                                }
-                            },
-                        };
-
-                        if show_ellipsis {
-                            printer.print_hline((0, row_offset), display_width, ELLIPSIS_STR);
-                        }
-
-                        printer.print((0, row_offset), display);
-                    }
-                },
-            };
-        }
+                    Self::print_display_str(printer, field, display_width);
+                }
+            }
+        });
     }
 }
 
@@ -151,20 +181,9 @@ impl Default for TagRecordView {
 
 pub struct TagEditorView {
     columns: IndexMap<String, ColumnDef>,
-    records: Vec<Record>,
+    tag_record_view: TagRecordView,
 
-    enabled: bool,
-    scroll_base: ScrollBase,
     last_size: Vec2,
-    read_only: bool,
-
-    cursor_pos: Option<(usize, usize)>,
-    selected_cells: HashSet<(usize, usize)>,
-    column_select: bool,
-
-    on_sort: Option<OnSortCallback>,
-    on_submit: Option<IndexCallback>,
-    on_select: Option<IndexCallback>,
 }
 
 impl Default for TagEditorView {
@@ -179,20 +198,8 @@ impl TagEditorView {
     pub fn new() -> Self {
         Self {
             columns: IndexMap::new(),
-            records: Vec::new(),
-
-            enabled: true,
-            scroll_base: ScrollBase::new(),
+            tag_record_view: Default::default(),
             last_size: Vec2::new(0, 0),
-            read_only: true,
-
-            cursor_pos: None,
-            selected_cells: HashSet::new(),
-            column_select: false,
-
-            on_sort: None,
-            on_submit: None,
-            on_select: None,
         }
     }
 }
@@ -208,24 +215,6 @@ impl TagEditorView {
             // truncated column width. Slice the string to that point.
             Some((trunc_pos, _)) => (&original_str[..trunc_pos], true),
         }
-    }
-
-    fn get_max_width_for_column(&self, column: &str) -> usize {
-        let column_def = match self.columns.get(column) {
-            Some(column_def) => column_def,
-            None => return 0,
-        };
-
-        let header_width = column_def.title.char_indices().count();
-
-        let mut max_seen = header_width;
-
-        for record in self.records.iter() {
-            let curr_row_width = record.get(column).map(|s| s.char_indices().count()).unwrap_or(0);
-            max_seen = max_seen.max(curr_row_width);
-        }
-
-        max_seen
     }
 
     pub fn draw_column_sep(printer: &Printer, height: usize) {
@@ -264,25 +253,7 @@ impl TagEditorView {
 
         let printer = printer.offset((1, 2));
 
-        if data_width > 0 {
-            for (row_offset, record) in self.records.iter().enumerate() {
-                let sub_printer = &printer.offset((0, row_offset)).focused(true);
-
-                // See if this record has the target column.
-                match record.get(column) {
-                    None => {
-                        sub_printer.with_color(ColorStyle::highlight(), |pr| {
-                            pr.print_hline((0, 0), data_width, MISSING_STR);
-                        })
-                    },
-                    Some(field) => {
-                        // Skip the number of characters needed to show a truncated view.
-                        let (display, _was_trunc) = Self::trunc_column_str(field, data_width);
-                        sub_printer.print((0, 0), display);
-                    },
-                };
-            }
-        }
+        self.tag_record_view.draw_column(&printer, column, data_width);
 
         // Return the actual width this column took.
         column_width
@@ -316,38 +287,42 @@ impl View for TagEditorView {
 }
 
 fn main() {
-    let ssv = TagEditorView {
-        columns: indexmap! {
-            str!("name") => ColumnDef {
-                title: str!("Name"),
-                desired_width: 10,
-            },
-            str!("age") => ColumnDef {
-                title: str!("Age"),
-                desired_width: 10,
-            },
-            str!("fave_food") => ColumnDef {
-                title: str!("Favorite Food"),
-                desired_width: 40,
-            },
+    let records = vec![
+        hashmap! {
+            str!("name") => str!("Mark LeMoine"),
+            str!("age") => str!("32"),
+            str!("fave_food") => str!("tacos + burritos + burgers"),
         },
-        records: vec![
-            hashmap! {
-                str!("name") => str!("Mark LeMoine"),
-                str!("age") => str!("32"),
-                str!("fave_food") => str!("tacos + burritos + burgers"),
-            },
-            hashmap! {
-                str!("name") => str!("Susanne Barajas"),
-                str!("age") => str!("27"),
-                str!("fave_food") => str!("chicken lettuce wraps"),
-            },
-            hashmap! {
-                str!("name") => str!("Leopoldo Marquez"),
-                str!("age") => str!("29"),
-                // str!("fave_food") => str!("steak"),
-            },
-        ],
+        hashmap! {
+            str!("name") => str!("Susanne Barajas"),
+            str!("age") => str!("27"),
+            str!("fave_food") => str!("chicken lettuce wraps"),
+        },
+        hashmap! {
+            str!("name") => str!("Leopoldo Marquez"),
+            str!("age") => str!("29"),
+            // str!("fave_food") => str!("steak"),
+        },
+    ];
+
+    let columns = indexmap! {
+        str!("name") => ColumnDef {
+            title: str!("Name"),
+            desired_width: 10,
+        },
+        str!("age") => ColumnDef {
+            title: str!("Age"),
+            desired_width: 10,
+        },
+        str!("fave_food") => ColumnDef {
+            title: str!("Favorite Food"),
+            desired_width: 40,
+        },
+    };
+
+    let ssv = TagEditorView {
+        columns,
+        tag_record_view: TagRecordView::with_records(records),
         ..Default::default()
     };
 
