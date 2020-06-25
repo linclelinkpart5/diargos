@@ -14,7 +14,7 @@ use cursive::direction::Direction;
 // use cursive::event::EventResult;
 use cursive::theme::ColorStyle;
 // use cursive::traits::Nameable;
-// use cursive::traits::Resizable;
+use cursive::traits::Resizable;
 use cursive::traits::Scrollable;
 // use cursive::vec::Vec2;
 // use cursive::view::ScrollBase;
@@ -30,7 +30,10 @@ const ELLIPSIS_STR_WIDTH: usize = 1;
 
 const MISSING_STR: &str = "╳";
 
-pub enum ColumnWidth {
+const COLUMN_SEP: &str = " │ ";
+const COLUMN_SEP_WIDTH: usize = 3;
+
+pub enum Sizing {
     Auto,
     Fixed(usize),
 }
@@ -45,8 +48,10 @@ pub struct ColumnDef {
     /// A friendly human-readable name for the column, used for display.
     pub title: String,
 
-    /// Display width for this column.
-    pub width: ColumnWidth,
+    /// Sizing for this column.
+    /// This affects the width of the content of the column, it does not include
+    /// any column padding/separators in the width.
+    pub sizing: Sizing,
 }
 
 pub struct TagRecordModel(Vec<Record>);
@@ -72,7 +77,7 @@ impl TagRecordModel {
         self.0.as_mut_slice()
     }
 
-    fn get_max_width_for_column(&self, column_key: &str) -> usize {
+    fn max_width_for_column(&self, column_key: &str) -> usize {
         let mut max_seen = 0;
 
         for record in self.0.iter() {
@@ -81,6 +86,65 @@ impl TagRecordModel {
         }
 
         max_seen
+    }
+
+    fn calc_extents_and_optionally_draw<'a, I>(&'a self, keys_and_sizings: I, opt_printer: Option<&'a Printer>) -> XY<usize>
+    where
+        I: IntoIterator<Item = (&'a str, Sizing)>
+    {
+        // The total Y length is easy, it is just the number of records.
+        let total_y = self.0.len();
+
+        let mut curr_x = 0;
+        let mut is_first_col = true;
+
+        for (column_key, sizing) in keys_and_sizings {
+            if is_first_col { is_first_col = false; }
+            else {
+                // Draw the column separator, and increment X by the column separator length.
+                opt_printer.map(|pr| { pr.print_vline((curr_x, 0), total_y, COLUMN_SEP); });
+                curr_x += COLUMN_SEP_WIDTH;
+            }
+
+            // Resolve the actual content width.
+            let content_width = match sizing {
+                Sizing::Fixed(width) => width,
+
+                // TODO: Actually calculate!
+                Sizing::Auto => 20,
+            };
+
+            // Print out the column, if a `Printer` was provided.
+            if let Some(printer) = opt_printer {
+                if content_width > 0 {
+                    for (row_offset, record) in self.0.iter().enumerate() {
+                        // See if this record contains the given field.
+                        match record.get(column_key) {
+                            None => {
+                                // Print out a highlighted sentinel, to indicate a missing value.
+                                printer.with_color(ColorStyle::highlight_inactive(), |pr| {
+                                    pr.print_hline((curr_x, row_offset), content_width, MISSING_STR);
+                                });
+                            },
+                            Some(field) => {
+                                let (trimmed_field, was_trimmed) = Self::trim_display_str(field, content_width);
+
+                                if was_trimmed {
+                                    printer.print_hline((curr_x, row_offset), content_width, ELLIPSIS_STR);
+                                }
+
+                                printer.print((curr_x, row_offset), trimmed_field);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Increment X by the content width.
+            curr_x += content_width;
+        }
+
+        (curr_x, total_y).into()
     }
 
     fn trim_display_str(original_str: &str, display_width: usize) -> (&str, bool) {
@@ -174,13 +238,14 @@ impl View for TagRecordModel {
         ])
     }
 
-    fn required_size(&mut self, constraint: XY<usize>) -> XY<usize> {
-        // constraint
+    fn required_size(&mut self, _constraint: XY<usize>) -> XY<usize> {
+        let keys_and_sizings = vec![
+            ("name", Sizing::Fixed(20)),
+            ("fave_food", Sizing::Fixed(30)),
+            ("age", Sizing::Fixed(10)),
+        ];
 
-        // NOTE: This seems to cause the `ScrollView` to work.
-        //       The `ScrollView` ends up "governing" an underlying `View` that
-        //       has this size, and scrolls the viewport in both axes.
-        (10000, 100).into()
+        self.calc_extents_and_optionally_draw(keys_and_sizings, None)
     }
 
     fn take_focus(&mut self, _: Direction) -> bool {
@@ -245,15 +310,15 @@ fn main() {
     // let columns = indexmap! {
     //     str!("name") => ColumnDef {
     //         title: str!("Name"),
-    //         width: ColumnWidth::Fixed(10),
+    //         width: Sizing::Fixed(10),
     //     },
     //     str!("age") => ColumnDef {
     //         title: str!("Age"),
-    //         width: ColumnWidth::Fixed(10),
+    //         width: Sizing::Fixed(10),
     //     },
     //     str!("fave_food") => ColumnDef {
     //         title: str!("Favorite Food"),
-    //         width: ColumnWidth::Fixed(40),
+    //         width: Sizing::Fixed(40),
     //     },
     // };
 
@@ -261,7 +326,7 @@ fn main() {
 
     let mut siv = Cursive::default();
 
-    siv.add_layer(trv.scrollable().scroll_x(true).scroll_y(true));
+    siv.add_layer(trv.scrollable().scroll_x(true).scroll_y(true).fixed_size((20, 20)));
 
     // let dialog = Dialog::around(Panel::new(TextView::new(include_str!("main.rs")).scrollable()))
     //     .title("Unicode and wide-character support")
