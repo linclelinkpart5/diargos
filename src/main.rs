@@ -32,7 +32,10 @@ use cursive::views::LinearLayout;
 // use cursive::views::ScrollView;
 // use cursive::views::TextView;
 
+use self::model::Columns;
 use self::model::Model;
+use self::model::Record;
+use self::model::Sizing;
 
 const ELLIPSIS_STR: &str = "⋯";
 const ELLIPSIS_STR_WIDTH: usize = 1;
@@ -81,24 +84,44 @@ fn trim_display_str(original_str: &str, content_width: usize) -> (&str, bool) {
     }
 }
 
+fn max_column_content_width(column_key: &str, columns: &Columns, records: &[Record]) -> usize {
+    let mut max_seen = match columns.get(column_key) {
+        Some(column_def) => str_width(&column_def.title),
+        None => { return 0; },
+    };
+
+    for record in records.iter() {
+        let curr_row_width = record.get(column_key).map(|s| str_width(s)).unwrap_or(0);
+        max_seen = max_seen.max(curr_row_width);
+    }
+
+    max_seen
+}
+
 pub struct TagEditorView {
     /// Contains all of the columns and records to display in this view.
     shared_model: Arc<Mutex<Model>>,
 
     /// A cache for the content widths of each column.
-    cached_content_widths: Vec<usize>,
+    cached_content_widths: Arc<Mutex<Vec<usize>>>,
 
     linear_layout: LinearLayout,
 }
 
 impl TagEditorView {
     pub fn new(model: Model) -> Self {
-        let cached_content_widths = Vec::with_capacity(model.len_columns());
+        let cached_content_widths = Arc::new(Mutex::new(Vec::with_capacity(model.columns.len())));
 
         let shared_model = Arc::new(Mutex::new(model));
 
-        let columns_canvas = Canvas::new(shared_model.clone());
-        let records_canvas = Canvas::new(shared_model.clone());
+        let columns_canvas =
+            Canvas::new((shared_model.clone(), cached_content_widths.clone()))
+            .with_draw(|(model, cached_widths), printer| {})
+        ;
+        let records_canvas =
+            Canvas::new((shared_model.clone(), cached_content_widths.clone()))
+            .with_draw(|(model, cached_widths), printer| {})
+        ;
 
         let linear_layout =
             LinearLayout::vertical()
@@ -111,6 +134,27 @@ impl TagEditorView {
             cached_content_widths,
             linear_layout,
         }
+    }
+
+    pub fn recache(&mut self) {
+        let mut cached_content_widths = self.cached_content_widths.lock().unwrap();
+        let model = self.shared_model.lock().unwrap();
+
+        cached_content_widths.clear();
+        cached_content_widths.reserve(model.columns.len());
+
+        for (column_key, column_def) in model.columns.iter() {
+            let column_sizing = column_def.sizing;
+
+            let content_width = match column_sizing {
+                Sizing::Fixed(width) => width,
+                Sizing::Auto => max_column_content_width(column_key, &model.columns, &model.records),
+            };
+
+            cached_content_widths.push(content_width);
+        }
+
+        assert_eq!(cached_content_widths.len(), model.columns.len());
     }
 }
 

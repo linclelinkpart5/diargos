@@ -27,8 +27,8 @@ pub type Columns = IndexMap<String, ColumnDef>;
 pub type Records = Vec<Record>;
 
 pub struct Model {
-    columns: Columns,
-    records: Records,
+    pub columns: Columns,
+    pub records: Records,
 
     updated_flag: bool,
 }
@@ -44,14 +44,6 @@ impl Model {
             records,
             updated_flag: true,
         }
-    }
-
-    pub fn len_columns(&self) -> usize {
-        self.columns.len()
-    }
-
-    pub fn len_records(&self) -> usize {
-        self.records.len()
     }
 
     pub fn was_updated(&self) -> bool {
