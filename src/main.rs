@@ -1,6 +1,12 @@
-use std::collections::HashMap;
 
-// use indexmap::IndexMap;
+mod model;
+
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::Mutex;
+
+use indexmap::IndexMap;
 use indexmap::indexmap;
 use maplit::hashmap;
 use str_macro::str;
@@ -19,11 +25,14 @@ use cursive::traits::Scrollable;
 // use cursive::vec::Vec2;
 // use cursive::view::ScrollBase;
 use cursive::view::View;
-// use cursive::views::Canvas;
+use cursive::views::Canvas;
 // use cursive::views::Dialog;
+use cursive::views::LinearLayout;
 // use cursive::views::Panel;
 // use cursive::views::ScrollView;
 // use cursive::views::TextView;
+
+use self::model::Model;
 
 const ELLIPSIS_STR: &str = "⋯";
 const ELLIPSIS_STR_WIDTH: usize = 1;
@@ -33,225 +42,411 @@ const MISSING_STR: &str = "╳";
 const COLUMN_SEP: &str = " │ ";
 const COLUMN_SEP_WIDTH: usize = 3;
 
-pub enum Sizing {
-    Auto,
-    Fixed(usize),
-}
-
-fn width(s: &str) -> usize {
+fn str_width(s: &str) -> usize {
     s.char_indices().count()
 }
 
-pub type Record = HashMap<String, String>;
+fn trim_display_str(original_str: &str, content_width: usize) -> (&str, bool) {
+    // If there is not enough room to even print an ellipsis, just return.
+    if content_width < ELLIPSIS_STR_WIDTH {
+        return ("", original_str != "")
+    }
 
-pub struct ColumnDef {
-    /// A friendly human-readable name for the column, used for display.
-    pub title: String,
+    let trunc_width = content_width - ELLIPSIS_STR_WIDTH;
 
-    /// Sizing for this column.
-    /// This affects the width of the content of the column, it does not include
-    /// any column padding/separators in the width.
-    pub sizing: Sizing,
+    let mut char_indices = original_str.char_indices();
+
+    // Skip the number of characters needed to show a truncated view.
+    match char_indices.by_ref().skip(trunc_width).peekable().peek() {
+        // The number of characters in the string is less than or equal to
+        // the truncated column width. Just show it as-is, with no ellipsis.
+        None => (&original_str[..], false),
+
+        // The number of characters in the string is greater than the
+        // truncated column width. Check to see how that number compares to
+        // the non-truncated column width.
+        Some(&(trunc_pos, _)) => {
+            // Skip the number of characters in the ellipsis.
+            match char_indices.by_ref().skip(ELLIPSIS_STR_WIDTH).next() {
+                // The string will fit in the full column width.
+                // Just show as-is, with no ellipsis.
+                None => (&original_str[..], false),
+
+                // There are characters left that will not fit in the column.
+                // Return a slice of the string, with enough room left over
+                // to include an ellipsis.
+                Some(..) => (&original_str[..trunc_pos], true),
+            }
+        },
+    }
 }
 
-pub struct TagRecordModel(Vec<Record>);
+pub struct TagEditorView {
+    /// Contains all of the columns and records to display in this view.
+    shared_model: Arc<Mutex<Model>>,
 
-impl TagRecordModel {
-    pub fn new() -> Self {
-        Self::with_records(Vec::new())
-    }
+    /// A cache for the content widths of each column.
+    cached_content_widths: Vec<usize>,
 
-    pub fn with_records(records: Vec<Record>) -> Self {
-        Self(records)
-    }
+    linear_layout: LinearLayout,
+}
 
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
+impl TagEditorView {
+    pub fn new(model: Model) -> Self {
+        let cached_content_widths = Vec::with_capacity(model.len_columns());
 
-    pub fn records(&self) -> &[Record] {
-        self.0.as_slice()
-    }
+        let shared_model = Arc::new(Mutex::new(model));
 
-    pub fn records_mut(&mut self) -> &mut [Record] {
-        self.0.as_mut_slice()
-    }
+        let columns_canvas = Canvas::new(shared_model.clone());
+        let records_canvas = Canvas::new(shared_model.clone());
 
-    fn max_width_for_column(&self, column_key: &str) -> usize {
-        let mut max_seen = 0;
+        let linear_layout =
+            LinearLayout::vertical()
+            .child(columns_canvas)
+            .child(records_canvas)
+        ;
 
-        for record in self.0.iter() {
-            let curr_row_width = record.get(column_key).map(|s| width(s)).unwrap_or(0);
-            max_seen = max_seen.max(curr_row_width);
-        }
-
-        max_seen
-    }
-
-    fn calc_extents_and_optionally_draw<'a, I>(&'a self, keys_and_sizings: I, opt_printer: Option<&'a Printer>) -> XY<usize>
-    where
-        I: IntoIterator<Item = (&'a str, Sizing)>
-    {
-        // The total Y length is easy, it is just the number of records.
-        let total_y = self.0.len();
-
-        let mut curr_x = 0;
-        let mut is_first_col = true;
-
-        for (column_key, sizing) in keys_and_sizings {
-            if is_first_col { is_first_col = false; }
-            else {
-                // Draw the column separator, and increment X by the column separator length.
-                opt_printer.map(|pr| { pr.print_vline((curr_x, 0), total_y, COLUMN_SEP); });
-                curr_x += COLUMN_SEP_WIDTH;
-            }
-
-            // Resolve the actual content width.
-            let content_width = match sizing {
-                Sizing::Fixed(width) => width,
-
-                // TODO: Actually calculate!
-                Sizing::Auto => 20,
-            };
-
-            // Print out the column, if a `Printer` was provided.
-            if let Some(printer) = opt_printer {
-                if content_width > 0 {
-                    for (row_offset, record) in self.0.iter().enumerate() {
-                        // See if this record contains the given field.
-                        match record.get(column_key) {
-                            None => {
-                                // Print out a highlighted sentinel, to indicate a missing value.
-                                printer.with_color(ColorStyle::highlight_inactive(), |pr| {
-                                    pr.print_hline((curr_x, row_offset), content_width, MISSING_STR);
-                                });
-                            },
-                            Some(field) => {
-                                let (trimmed_field, was_trimmed) = Self::trim_display_str(field, content_width);
-
-                                if was_trimmed {
-                                    printer.print_hline((curr_x, row_offset), content_width, ELLIPSIS_STR);
-                                }
-
-                                printer.print((curr_x, row_offset), trimmed_field);
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Increment X by the content width.
-            curr_x += content_width;
-        }
-
-        (curr_x, total_y).into()
-    }
-
-    fn trim_display_str(original_str: &str, display_width: usize) -> (&str, bool) {
-        // If there is not enough room to even print an ellipsis, just return.
-        if display_width < ELLIPSIS_STR_WIDTH {
-            return ("", original_str != "")
-        }
-
-        let trunc_width = display_width - ELLIPSIS_STR_WIDTH;
-
-        let mut char_indices = original_str.char_indices();
-
-        // Skip the number of characters needed to show a truncated view.
-        match char_indices.by_ref().skip(trunc_width).peekable().peek() {
-            // The number of characters in the string is less than or equal to
-            // the truncated column width. Just show it as-is, with no ellipsis.
-            None => (&original_str[..], false),
-
-            // The number of characters in the string is greater than the
-            // truncated column width. Check to see how that number compares to
-            // the non-truncated column width.
-            Some(&(trunc_pos, _)) => {
-                // Skip the number of characters in the ellipsis.
-                match char_indices.by_ref().skip(ELLIPSIS_STR_WIDTH).next() {
-                    // The string will fit in the full column width.
-                    // Just show as-is, with no ellipsis.
-                    None => (&original_str[..], false),
-
-                    // There are characters left that will not fit in the column.
-                    // Return a slice of the string, with enough room left over
-                    // to include an ellipsis.
-                    Some(..) => (&original_str[..trunc_pos], true),
-                }
-            },
-        }
-    }
-
-    fn draw_columns<'a, I>(&'a self, printer: &'a Printer, keys_and_widths: I)
-    where
-        I: IntoIterator<Item = (&'a str, usize)>,
-    {
-        let mut column_offset = 0;
-        let mut is_first_col = true;
-
-        for (column_key, content_width) in keys_and_widths {
-            if is_first_col { is_first_col = false; }
-            else {
-                // Pad, then draw a vertical separator, then pad again.
-                column_offset += 1;
-                printer.print_vline((column_offset, 0), self.0.len(), "│");
-                column_offset += 1;
-                column_offset += 1;
-            }
-
-            // Only do work if the content width is greater than 0.
-            if content_width > 0 {
-                for (row_offset, record) in self.0.iter().enumerate() {
-                    // See if this record contains the given field.
-                    match record.get(column_key) {
-                        None => {
-                            // Print out a highlighted sentinel, to indicate a missing value.
-                            printer.with_color(ColorStyle::highlight_inactive(), |pr| {
-                                pr.print_hline((column_offset, row_offset), content_width, MISSING_STR);
-                            })
-                        },
-                        Some(field) => {
-                            let (trimmed_field, was_trimmed) = Self::trim_display_str(field, content_width);
-
-                            if was_trimmed {
-                                printer.print_hline((column_offset, row_offset), content_width, ELLIPSIS_STR);
-                            }
-
-                            printer.print((column_offset, row_offset), trimmed_field);
-                        }
-                    }
-                }
-
-                // Increment the offset.
-                column_offset += content_width;
-            }
+        Self {
+            shared_model,
+            cached_content_widths,
+            linear_layout,
         }
     }
 }
 
-impl View for TagRecordModel {
-    fn draw(&self, printer: &Printer) {
-        self.draw_columns(printer, vec![
-            ("name", 20),
-            ("fave_food", 30),
-            ("age", 10),
-        ])
-    }
+// fn max_column_content_width(records: &[Record], column_key: &str) -> usize {
+//     let mut max_seen = 0;
 
-    fn required_size(&mut self, _constraint: XY<usize>) -> XY<usize> {
-        let keys_and_sizings = vec![
-            ("name", Sizing::Fixed(20)),
-            ("fave_food", Sizing::Fixed(30)),
-            ("age", Sizing::Fixed(10)),
-        ];
+//     for record in records.iter() {
+//         let curr_row_width = record.get(column_key).map(|s| str_width(s)).unwrap_or(0);
+//         max_seen = max_seen.max(curr_row_width);
+//     }
 
-        self.calc_extents_and_optionally_draw(keys_and_sizings, None)
-    }
+//     max_seen
+// }
 
-    fn take_focus(&mut self, _: Direction) -> bool {
-        true
-    }
-}
+// fn total_display_size(columns: &IndexMap<String, ColumnDef>, records: &[Record]) -> (usize, usize) {
+//     // The total Y length is easy, it is just the number of records.
+//     let y = records.len();
+
+//     let mut x = 0;
+//     let mut is_first_col = true;
+
+//     let keys_and_sizings = columns.iter().map(|(k, d)| (k.as_str(), d.sizing));
+
+//     for (column_key, sizing) in keys_and_sizings {
+//         if is_first_col { is_first_col = false; }
+//         else {
+//             // Draw the column separator, and increment X by the column separator length.
+//             // opt_printer.map(|pr| { pr.print_vline((x, 0), y, COLUMN_SEP); });
+//             x += COLUMN_SEP_WIDTH;
+//         }
+
+//         // Resolve the actual content width.
+//         let content_width = match sizing {
+//             Sizing::Fixed(width) => width,
+//             Sizing::Auto => max_column_content_width(records, column_key),
+//         };
+
+//         // Print out the column, if a `Printer` was provided.
+//         // if let Some(printer) = opt_printer {
+//         //     if content_width > 0 {
+//         //         for (row_offset, record) in self.0.iter().enumerate() {
+//         //             // See if this record contains the given field.
+//         //             match record.get(column_key) {
+//         //                 None => {
+//         //                     // Print out a highlighted sentinel, to indicate a missing value.
+//         //                     printer.with_color(ColorStyle::highlight_inactive(), |pr| {
+//         //                         pr.print_hline((x, row_offset), content_width, MISSING_STR);
+//         //                     });
+//         //                 },
+//         //                 Some(field) => {
+//         //                     let (trimmed_field, was_trimmed) = trim_display_str(field, content_width);
+
+//         //                     if was_trimmed {
+//         //                         printer.print_hline((x, row_offset), content_width, ELLIPSIS_STR);
+//         //                     }
+
+//         //                     printer.print((x, row_offset), trimmed_field);
+//         //                 }
+//         //             }
+//         //         }
+//         //     }
+//         // }
+
+//         // Increment X by the content width.
+//         x += content_width;
+//     }
+
+//     (x, y)
+// }
+
+// pub struct TagRecordModel(Vec<Record>);
+
+// impl TagRecordModel {
+//     pub fn new() -> Self {
+//         Self::with_records(Vec::new())
+//     }
+
+//     pub fn with_records(records: Vec<Record>) -> Self {
+//         Self(records)
+//     }
+
+//     pub fn len(&self) -> usize {
+//         self.0.len()
+//     }
+
+//     pub fn records(&self) -> &[Record] {
+//         self.0.as_slice()
+//     }
+
+//     pub fn records_mut(&mut self) -> &mut [Record] {
+//         self.0.as_mut_slice()
+//     }
+
+//     fn max_width_for_column(&self, column_key: &str) -> usize {
+//         let mut max_seen = 0;
+
+//         for record in self.0.iter() {
+//             let curr_row_width = record.get(column_key).map(|s| str_width(s)).unwrap_or(0);
+//             max_seen = max_seen.max(curr_row_width);
+//         }
+
+//         max_seen
+//     }
+
+//     fn calc_extents_and_optionally_draw<'a, I>(&'a self, keys_and_sizings: I, opt_printer: Option<&'a Printer>) -> XY<usize>
+//     where
+//         I: IntoIterator<Item = (&'a str, Sizing)>
+//     {
+//         // The total Y length is easy, it is just the number of records.
+//         let total_y = self.0.len();
+
+//         let mut curr_x = 0;
+//         let mut is_first_col = true;
+
+//         for (column_key, sizing) in keys_and_sizings {
+//             if is_first_col { is_first_col = false; }
+//             else {
+//                 // Draw the column separator, and increment X by the column separator length.
+//                 opt_printer.map(|pr| { pr.print_vline((curr_x, 0), total_y, COLUMN_SEP); });
+//                 curr_x += COLUMN_SEP_WIDTH;
+//             }
+
+//             // Resolve the actual content width.
+//             let content_width = match sizing {
+//                 Sizing::Fixed(width) => width,
+
+//                 // TODO: Actually calculate!
+//                 Sizing::Auto => 20,
+//             };
+
+//             // Print out the column, if a `Printer` was provided.
+//             if let Some(printer) = opt_printer {
+//                 if content_width > 0 {
+//                     for (row_offset, record) in self.0.iter().enumerate() {
+//                         // See if this record contains the given field.
+//                         match record.get(column_key) {
+//                             None => {
+//                                 // Print out a highlighted sentinel, to indicate a missing value.
+//                                 printer.with_color(ColorStyle::highlight_inactive(), |pr| {
+//                                     pr.print_hline((curr_x, row_offset), content_width, MISSING_STR);
+//                                 });
+//                             },
+//                             Some(field) => {
+//                                 let (trimmed_field, was_trimmed) = trim_display_str(field, content_width);
+
+//                                 if was_trimmed {
+//                                     printer.print_hline((curr_x, row_offset), content_width, ELLIPSIS_STR);
+//                                 }
+
+//                                 printer.print((curr_x, row_offset), trimmed_field);
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+
+//             // Increment X by the content width.
+//             curr_x += content_width;
+//         }
+
+//         (curr_x, total_y).into()
+//     }
+
+//     fn draw_columns<'a, I>(&'a self, printer: &'a Printer, keys_and_sizings: I)
+//     where
+//         I: IntoIterator<Item = (&'a str, Sizing)>,
+//     {
+//         self.calc_extents_and_optionally_draw(keys_and_sizings, Some(printer));
+//     }
+// }
+
+// impl View for TagRecordModel {
+//     fn draw(&self, printer: &Printer) {
+//         self.draw_columns(printer, vec![
+//             ("name", Sizing::Fixed(20)),
+//             ("fave_food", Sizing::Fixed(30)),
+//             ("age", Sizing::Fixed(10)),
+//         ])
+//     }
+
+//     fn required_size(&mut self, _constraint: XY<usize>) -> XY<usize> {
+//         let keys_and_sizings = vec![
+//             ("name", Sizing::Fixed(20)),
+//             ("fave_food", Sizing::Fixed(30)),
+//             ("age", Sizing::Fixed(10)),
+//         ];
+
+//         self.calc_extents_and_optionally_draw(keys_and_sizings, None)
+//     }
+
+//     fn take_focus(&mut self, _: Direction) -> bool {
+//         true
+//     }
+// }
+
+// pub struct NewTagEditorView {
+//     columns: IndexMap<String, ColumnDef>,
+//     records: Vec<Record>,
+
+//     layout: LinearLayout,
+
+//     cached_content_widths: Vec<usize>,
+// }
+
+// impl NewTagEditorView {
+//     pub fn new() -> Self {
+//         Self {
+//             columns: IndexMap::new(),
+//             records: Vec::new(),
+//             layout: LinearLayout::vertical(),
+
+//             cached_content_widths: Vec::new(),
+//         }
+//     }
+
+//     fn max_column_content_width(&self, column_key: &str) -> usize {
+//         let mut max_seen = 0;
+
+//         for record in self.records.iter() {
+//             let curr_row_width = record.get(column_key).map(|s| str_width(s)).unwrap_or(0);
+//             max_seen = max_seen.max(curr_row_width);
+//         }
+
+//         max_seen
+//     }
+
+//     fn calculate_content_widths(&mut self) {
+//         self.cached_content_widths.clear();
+//         self.cached_content_widths.reserve(self.columns.len());
+
+//         for (column_key, column_def) in self.columns.iter() {
+//             let column_sizing = column_def.sizing;
+
+//             let content_width = match column_sizing {
+//                 Sizing::Fixed(width) => width,
+//                 Sizing::Auto => self.max_column_content_width(column_key),
+//             };
+
+//             self.cached_content_widths.push(content_width);
+//         }
+
+//         assert_eq!(self.cached_content_widths.len(), self.columns.len());
+//     }
+
+//     fn calculate_bounds_optionally_draw(&self, opt_printer: Option<&Printer>) -> (usize, usize) {
+//         // The total Y length is easy, it is just the number of records plus the height of the header.
+//         let curr_y = 0;
+
+//         let mut curr_x = 0;
+//         let mut is_first_col = true;
+
+//         for (column_key, &content_width) in self.columns.keys().zip(self.cached_content_widths.iter()) {
+//             if is_first_col { is_first_col = false; }
+//             else {
+//                 // Draw the column separator, and increment X by the column separator length.
+//                 opt_printer.map(|pr| { pr.print_vline((curr_x, 0), curr_y, COLUMN_SEP); });
+//                 curr_x += COLUMN_SEP_WIDTH;
+//             }
+
+//             // Print out the column, if a `Printer` was provided.
+//             if let Some(printer) = opt_printer {
+//                 if content_width > 0 {
+//                     for (row_offset, record) in self.records.iter().enumerate() {
+//                         // See if this record contains the given field.
+//                         match record.get(column_key) {
+//                             None => {
+//                                 // Print out a highlighted sentinel, to indicate a missing value.
+//                                 printer.with_color(ColorStyle::highlight_inactive(), |pr| {
+//                                     pr.print_hline((curr_x, row_offset), content_width, MISSING_STR);
+//                                 });
+//                             },
+//                             Some(field) => {
+//                                 let (trimmed_field, was_trimmed) = trim_display_str(field, content_width);
+
+//                                 if was_trimmed {
+//                                     printer.print_hline((curr_x, row_offset), content_width, ELLIPSIS_STR);
+//                                 }
+
+//                                 printer.print((curr_x, row_offset), trimmed_field);
+//                             }
+//                         }
+//                     }
+//                 }
+//             }
+
+//             // Increment X by the content width.
+//             curr_x += content_width;
+//         }
+
+//         (curr_x, curr_y)
+//     }
+// }
+
+// pub struct TagEditorView {
+//     columns: IndexMap<String, ColumnDef>,
+//     model: TagRecordModel,
+// }
+
+// impl TagEditorView {
+//     fn iter_keys_and_sizings(&self) -> impl Iterator<Item = (&str, Sizing)> {
+//         self.columns.iter().map(|(k, d)| (k.as_str(), d.sizing))
+//     }
+
+//     // fn calc_extents<'a, I>(&'a self, opt_printer: Option<&'a Printer>) -> XY<usize>
+//     // where
+//     //     I: IntoIterator<Item = (&'a str, Sizing)>
+//     // {
+//     //     // The total X size is the same as that of the model.
+//     //     // The total Y size is the Y size of the model plus 2, for the header.
+//     //     let mut total_y = 0;
+
+//     //     // Draw the header, if requested.
+//     //     if let Some(printer) = opt_printer.as_ref() {
+
+//     //     }
+
+//     //     total_y += 2;
+//     //     let opt_offset_printer = opt_printer.map(|pr| pr.offset((0, total_y)));
+//     //     let model_extents = self.model.calc_extents_and_optionally_draw(self.iter_keys_and_sizings(), opt_printer);
+//     // }
+// }
+
+// impl View for TagEditorView {
+//     fn draw(&self, printer: &Printer) {
+//         self.model.calc_extents_and_optionally_draw(self.iter_keys_and_sizings(), Some(printer));
+//     }
+
+//     fn required_size(&mut self, _constraint: XY<usize>) -> XY<usize> {
+//         let mut model_size = self.model.calc_extents_and_optionally_draw(self.iter_keys_and_sizings(), None);
+//         model_size
+//     }
+
+//     fn take_focus(&mut self, _: Direction) -> bool {
+//         true
+//     }
+// }
 
 fn main() {
     let records = vec![
@@ -322,11 +517,11 @@ fn main() {
     //     },
     // };
 
-    let trv = TagRecordModel::with_records(records);
+    // let trv = TagRecordModel::with_records(records);
 
     let mut siv = Cursive::default();
 
-    siv.add_layer(trv.scrollable().scroll_x(true).scroll_y(true).fixed_size((20, 20)));
+    // siv.add_layer(trv.scrollable().scroll_x(true).scroll_y(true).fixed_size((20, 20)));
 
     // let dialog = Dialog::around(Panel::new(TextView::new(include_str!("main.rs")).scrollable()))
     //     .title("Unicode and wide-character support")
