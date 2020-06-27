@@ -4,6 +4,8 @@ use std::slice::Iter as SliceIter;
 
 use indexmap::IndexMap;
 
+use crate::util::Util;
+
 #[derive(Clone, Copy)]
 pub enum Sizing {
     Auto,
@@ -30,7 +32,8 @@ pub struct Model {
     pub columns: Columns,
     pub records: Records,
 
-    updated_flag: bool,
+    cached_content_widths: Vec<usize>,
+    needs_recache: bool,
 }
 
 impl Model {
@@ -39,19 +42,60 @@ impl Model {
     }
 
     pub fn with_data(columns: Columns, records: Records) -> Self {
+        let cached_content_widths = Vec::with_capacity(columns.len());
+
         Self {
             columns,
             records,
-            updated_flag: true,
+            cached_content_widths,
+            needs_recache: true,
         }
     }
 
-    pub fn was_updated(&self) -> bool {
-        self.updated_flag
+    pub fn recache(&mut self) {
+        // Proceed and clear the flag if it was set.
+        // Otherwise, bail out.
+        if self.needs_recache { self.needs_recache = false; }
+        else { return; }
+
+        self.cached_content_widths.clear();
+        self.cached_content_widths.reserve(self.columns.len());
+
+        for (column_key, column_def) in self.columns.iter() {
+            let column_sizing = column_def.sizing;
+
+            let content_width = match column_sizing {
+                Sizing::Fixed(width) => width,
+                Sizing::Auto => Util::max_column_content_width(column_key, &self.columns, &self.records),
+            };
+
+            self.cached_content_widths.push(content_width);
+        }
+
+        assert_eq!(self.cached_content_widths.len(), self.columns.len());
     }
 
-    pub fn mark_resolved(&mut self) {
-        self.updated_flag = false
+    pub fn mutate_columns<F, R>(&mut self, func: F) -> R
+    where
+        F: FnOnce(&mut Columns) -> R,
+    {
+        let result = func(&mut self.columns);
+        self.needs_recache = true;
+        result
+    }
+
+    pub fn mutate_records<F, R>(&mut self, func: F) -> R
+    where
+        F: FnOnce(&mut Records) -> R,
+    {
+        let result = func(&mut self.records);
+        self.needs_recache = true;
+        result
+    }
+
+    pub fn total_display_width(&self, column_sep_width: usize) -> usize {
+        let total_sep_width = self.cached_content_widths.len().saturating_sub(1) * column_sep_width;
+        self.cached_content_widths.iter().sum::<usize>() + total_sep_width
     }
 
     pub fn iter_column<'a>(&'a self, column_key: &'a str) -> IterColumn<'a> {
