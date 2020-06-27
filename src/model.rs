@@ -101,6 +101,10 @@ impl Model {
     pub fn iter_column<'a>(&'a self, column_key: &'a str) -> IterColumn<'a> {
         IterColumn(column_key, self.records.iter())
     }
+
+    pub fn iter_cache<'a>(&'a self) -> IterCache<'a> {
+        IterCache(self.cached_content_widths.iter())
+    }
 }
 
 impl Default for Model {
@@ -117,5 +121,15 @@ impl<'a> Iterator for IterColumn<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let record = self.1.next()?;
         Some(record.get(self.0))
+    }
+}
+
+pub struct IterCache<'a>(SliceIter<'a, usize>);
+
+impl<'a> Iterator for IterCache<'a> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next().copied()
     }
 }
