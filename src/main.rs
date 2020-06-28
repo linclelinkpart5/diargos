@@ -104,9 +104,49 @@ impl TagEditorView {
                 (total_width, 2).into()
             })
         ;
+
         let records_canvas =
             Canvas::new(shared_model.clone())
-            .with_draw(|_model, _printer| {})
+            .with_draw(|model, printer| {
+                let model = model.lock().unwrap();
+
+                let mut offset_x = 0;
+                let mut is_first_col = true;
+
+                for (column_key, content_width) in model.columns.keys().zip(model.iter_cache()) {
+                    if is_first_col { is_first_col = false; }
+                    else {
+                        printer.print_vline((offset_x, 0), model.records.len(), COLUMN_SEP);
+                        offset_x += COLUMN_SEP_WIDTH;
+                    }
+
+                    for (offset_y, record) in model.records.iter().enumerate() {
+                        match record.get(column_key) {
+                            None => {
+                                // Print out a highlighted sentinel, to indicate a missing value.
+                                printer.with_color(ColorStyle::highlight_inactive(), |pr| {
+                                    pr.print_hline((offset_x, offset_y), content_width, MISSING_STR);
+                                });
+                            },
+                            Some(value) => {
+                                let (display_value, was_trimmed) = Util::trim_display_str(
+                                    value,
+                                    content_width,
+                                    ELLIPSIS_STR_WIDTH,
+                                );
+
+                                if was_trimmed {
+                                    printer.print_hline((offset_x, offset_y), content_width, ELLIPSIS_STR);
+                                }
+
+                                printer.print((offset_x, offset_y), display_value);
+                            },
+                        }
+                    }
+
+                    offset_x += content_width;
+                }
+            })
             .with_required_size(|model, _constraints| {
                 let mut model = model.lock().unwrap();
                 model.recache();
@@ -114,6 +154,9 @@ impl TagEditorView {
 
                 (total_width, model.records.len()).into()
             })
+            .scrollable()
+            .scroll_x(false)
+            .scroll_y(true)
         ;
 
         let linear_layout =
@@ -140,14 +183,6 @@ impl View for TagEditorView {
 
     fn required_size(&mut self, constraint: XY<usize>) -> XY<usize> {
         self.linear_layout.required_size(constraint)
-        // let mut model = self.shared_model.lock().unwrap();
-        // model.recache();
-
-        // let total_width = model.total_display_width(COLUMN_SEP_WIDTH);
-        // let num_records = model.records.len();
-
-        // // TODO: Make this more robust.
-        // XY::new(total_width, num_records + 2)
     }
 
     fn on_event(&mut self, event: Event) -> EventResult {
@@ -184,33 +219,33 @@ fn main() {
         hashmap! { str!("name") => str!("Numi") },
         hashmap! { str!("name") => str!("Numi") },
         hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
-        // hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
+        hashmap! { str!("name") => str!("Numi") },
     ];
 
     let columns = indexmap! {
