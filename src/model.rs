@@ -44,12 +44,16 @@ impl Model {
     pub fn with_data(columns: Columns, records: Records) -> Self {
         let cached_content_widths = Vec::with_capacity(columns.len());
 
-        Self {
+        let mut new = Self {
             columns,
             records,
             cached_content_widths,
             needs_recache: true,
-        }
+        };
+
+        new.recache();
+
+        new
     }
 
     pub fn recache(&mut self) {

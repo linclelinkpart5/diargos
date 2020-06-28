@@ -107,6 +107,13 @@ impl TagEditorView {
         let records_canvas =
             Canvas::new(shared_model.clone())
             .with_draw(|_model, _printer| {})
+            .with_required_size(|model, _constraints| {
+                let mut model = model.lock().unwrap();
+                model.recache();
+                let total_width = model.total_display_width(COLUMN_SEP_WIDTH);
+
+                (total_width, model.records.len()).into()
+            })
         ;
 
         let linear_layout =
@@ -127,26 +134,28 @@ impl View for TagEditorView {
         self.linear_layout.draw(printer);
     }
 
-    fn layout(&mut self, _constraint: XY<usize>) {
-        let mut model = self.shared_model.lock().unwrap();
-        model.recache();
+    fn layout(&mut self, constraint: XY<usize>) {
+        self.linear_layout.layout(constraint)
     }
 
-    fn required_size(&mut self, _constraint: XY<usize>) -> XY<usize> {
-        let model = self.shared_model.lock().unwrap();
-        let total_width = model.total_display_width(COLUMN_SEP_WIDTH);
-        let num_records = model.records.len();
+    fn required_size(&mut self, constraint: XY<usize>) -> XY<usize> {
+        self.linear_layout.required_size(constraint)
+        // let mut model = self.shared_model.lock().unwrap();
+        // model.recache();
 
-        // TODO: Make this more robust.
-        XY::new(total_width, num_records + 2)
+        // let total_width = model.total_display_width(COLUMN_SEP_WIDTH);
+        // let num_records = model.records.len();
+
+        // // TODO: Make this more robust.
+        // XY::new(total_width, num_records + 2)
     }
 
     fn on_event(&mut self, event: Event) -> EventResult {
-        EventResult::Ignored
+        self.linear_layout.on_event(event)
     }
 
-    fn take_focus(&mut self, _source: Direction) -> bool {
-        true
+    fn take_focus(&mut self, source: Direction) -> bool {
+        self.linear_layout.take_focus(source)
     }
 }
 
@@ -175,39 +184,39 @@ fn main() {
         hashmap! { str!("name") => str!("Numi") },
         hashmap! { str!("name") => str!("Numi") },
         hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
+        // hashmap! { str!("name") => str!("Numi") },
     ];
 
     let columns = indexmap! {
         str!("name") => ColumnDef {
             title: str!("Name"),
-            sizing: Sizing::Fixed(10),
+            sizing: Sizing::Fixed(40),
         },
         str!("age") => ColumnDef {
             title: str!("Age"),
