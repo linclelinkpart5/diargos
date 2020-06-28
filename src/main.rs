@@ -2,12 +2,9 @@
 mod model;
 mod util;
 
-use std::collections::HashMap;
-use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use indexmap::IndexMap;
 use indexmap::indexmap;
 use maplit::hashmap;
 use str_macro::str;
@@ -20,23 +17,14 @@ use cursive::direction::Direction;
 use cursive::event::Event;
 use cursive::event::EventResult;
 use cursive::theme::ColorStyle;
-// use cursive::traits::Nameable;
 use cursive::traits::Resizable;
 use cursive::traits::Scrollable;
-// use cursive::vec::Vec2;
-// use cursive::view::ScrollBase;
 use cursive::view::View;
 use cursive::views::Canvas;
-// use cursive::views::Dialog;
 use cursive::views::LinearLayout;
-// use cursive::views::Panel;
-// use cursive::views::ScrollView;
-// use cursive::views::TextView;
 
-use self::model::Columns;
 use self::model::ColumnDef;
 use self::model::Model;
-use self::model::Record;
 use self::model::Sizing;
 use self::util::Util;
 
@@ -46,15 +34,12 @@ const ELLIPSIS_STR_WIDTH: usize = 1;
 const MISSING_STR: &str = "╳";
 
 const COLUMN_SEP: &str = " │ ";
+const COLUMN_HEADER_SEP: &str = "─┼─";
 const COLUMN_SEP_WIDTH: usize = 3;
 
+const COLUMN_HEADER_BAR: &str = "─";
 
-pub struct TagEditorView {
-    /// Contains all of the columns and records to display in this view.
-    shared_model: Arc<Mutex<Model>>,
-
-    linear_layout: LinearLayout,
-}
+pub struct TagEditorView(LinearLayout);
 
 impl TagEditorView {
     pub fn new(model: Model) -> Self {
@@ -76,6 +61,7 @@ impl TagEditorView {
                     if is_first_col { is_first_col = false; }
                     else {
                         printer.print((offset_x, 0), COLUMN_SEP);
+                        printer.print((offset_x, 1), COLUMN_HEADER_SEP);
                         offset_x += COLUMN_SEP_WIDTH;
                     }
 
@@ -92,6 +78,8 @@ impl TagEditorView {
                     }
 
                     printer.print((offset_x, 0), display_title);
+
+                    printer.print_hline((offset_x, 1), content_width, COLUMN_HEADER_BAR);
 
                     offset_x += content_width;
                 }
@@ -159,38 +147,39 @@ impl TagEditorView {
             .scroll_y(true)
         ;
 
+        // TODO: See if there is an option to allow the records `Canvas` to have
+        //       its scrollbar always visible.
+        // TODO: Drawing vertically one column at a time might be slow, test out
+        //       horizontal drawing.
         let linear_layout =
             LinearLayout::vertical()
             .child(columns_canvas)
             .child(records_canvas)
         ;
 
-        Self {
-            shared_model,
-            linear_layout,
-        }
+        Self(linear_layout)
     }
 }
 
 impl View for TagEditorView {
     fn draw(&self, printer: &Printer) {
-        self.linear_layout.draw(printer);
+        self.0.draw(printer);
     }
 
     fn layout(&mut self, constraint: XY<usize>) {
-        self.linear_layout.layout(constraint)
+        self.0.layout(constraint)
     }
 
     fn required_size(&mut self, constraint: XY<usize>) -> XY<usize> {
-        self.linear_layout.required_size(constraint)
+        self.0.required_size(constraint)
     }
 
     fn on_event(&mut self, event: Event) -> EventResult {
-        self.linear_layout.on_event(event)
+        self.0.on_event(event)
     }
 
     fn take_focus(&mut self, source: Direction) -> bool {
-        self.linear_layout.take_focus(source)
+        self.0.take_focus(source)
     }
 }
 
@@ -259,7 +248,7 @@ fn main() {
         },
         str!("fave_food") => ColumnDef {
             title: str!("Favorite Food"),
-            sizing: Sizing::Fixed(40),
+            sizing: Sizing::Fixed(500),
         },
     };
 
@@ -269,7 +258,12 @@ fn main() {
 
     let mut siv = Cursive::default();
 
-    siv.add_layer(tag_editor_view.scrollable().scroll_x(true));
+    siv.add_layer(
+        tag_editor_view
+        .scrollable()
+        .scroll_x(true)
+        .fixed_size((30, 20))
+    );
 
     siv.run();
 }
