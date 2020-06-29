@@ -13,6 +13,7 @@ cursive_table_view = "0.12"
 rand = "*"
 str-macro = "0.1.4"
 maplit = "1.0.2"
+unicode-width = "*"
 
 [dependencies.cursive]
 version = "0.15"

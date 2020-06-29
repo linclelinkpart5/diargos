@@ -184,71 +184,76 @@ impl View for TagEditorView {
 }
 
 fn main() {
-    let records = vec![
-        hashmap! {
-            str!("name") => str!("Mark LeMoine"),
-            str!("age") => str!("32"),
-            str!("fave_food") => str!("tacos + burritos + burgers"),
-        },
-        hashmap! {
-            str!("name") => str!("Susanne Barajas"),
-            str!("age") => str!("27"),
-            str!("fave_food") => str!("chicken lettuce wraps"),
-        },
-        hashmap! {
-            str!("name") => str!("Leopoldo Marquezyayayayayaya"),
-            str!("age") => str!("29"),
-            // str!("fave_food") => str!("steak"),
-        },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
-        hashmap! { str!("name") => str!("Numi") },
+    use rand::seq::SliceRandom;
+    use rand::seq::IteratorRandom;
+
+    let fave_foods = vec![
+        "pizza",
+        "steak",
+        "lasagna",
+        "tacos",
+        "burritos",
+        "chicken",
+        "burgers",
+        "waffles",
+        "sushi",
+        "curry",
+        "ice cream",
+        "brownies",
+        "popcorn",
+        "burritos",
+        "fried rice",
     ];
+
+    let names = vec![
+        "Raina Salas",
+        "Mariah Hernandez",
+        "Kadin Rivas",
+        "Osvaldo Hebert",
+        "Adrien Lutz",
+        "Peyton Mckenzie",
+        "Valentin Nixon",
+        "Greta Miles",
+        "Cameron French",
+        "Jayden Romero",
+        "Alden Conrad",
+        "Peter King",
+        "Jake Duncan",
+        "Shaun Barr",
+        "Danna Shannon",
+    ];
+
+    let num_records = 50;
+    let mut rng = rand::thread_rng();
+
+    let mut records =
+        (0..=num_records)
+        .map(|_| {
+            hashmap! {
+                str!("name") => names.choose(&mut rng).unwrap().to_string(),
+                str!("age") => str!((18..=70).choose(&mut rng).unwrap()),
+                str!("fave_food") => fave_foods.choose(&mut rng).unwrap().to_string(),
+            }
+        })
+        .collect::<Vec<_>>()
+    ;
+
+    records.insert(0, hashmap! {
+        str!("name") => str!("日本人の氏名"),
+    });
 
     let columns = indexmap! {
         str!("name") => ColumnDef {
             title: str!("Name"),
-            sizing: Sizing::Fixed(10),
+            sizing: Sizing::Fixed(3),
         },
         str!("age") => ColumnDef {
             title: str!("Age"),
-            sizing: Sizing::Fixed(10),
+            sizing: Sizing::Fixed(2),
         },
         str!("fave_food") => ColumnDef {
             title: str!("Favorite Food"),
-            sizing: Sizing::Fixed(500),
+            sizing: Sizing::Fixed(20),
         },
     };
 

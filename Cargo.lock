@@ -234,6 +234,7 @@ dependencies = [
  "maplit",
  "rand",
  "str-macro",
+ "unicode-width",
 ]
 
 [[package]]
