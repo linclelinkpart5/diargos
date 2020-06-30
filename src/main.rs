@@ -23,8 +23,11 @@ use cursive::view::View;
 use cursive::views::Canvas;
 use cursive::views::LinearLayout;
 
+use self::model::Columns;
 use self::model::ColumnDef;
 use self::model::Model;
+use self::model::Record;
+use self::model::Records;
 use self::model::Sizing;
 use self::util::Util;
 
@@ -39,7 +42,10 @@ const COLUMN_SEP_WIDTH: usize = 3;
 
 const COLUMN_HEADER_BAR: &str = "─";
 
-pub struct TagEditorView(LinearLayout);
+pub struct TagEditorView {
+    shared_model: Arc<Mutex<Model>>,
+    linear_layout: LinearLayout,
+}
 
 impl TagEditorView {
     pub fn new(model: Model) -> Self {
@@ -169,29 +175,58 @@ impl TagEditorView {
             .child(records_canvas)
         ;
 
-        Self(linear_layout)
+        Self {
+            shared_model,
+            linear_layout,
+        }
+    }
+
+    pub fn mutate_columns<F, R>(&mut self, func: F) -> R
+    where
+        F: FnOnce(&mut Columns) -> R,
+    {
+        let mut model = self.shared_model.lock().unwrap();
+        model.mutate_columns(func)
+    }
+
+    pub fn mutate_records<F, R>(&mut self, func: F) -> R
+    where
+        F: FnOnce(&mut Records) -> R,
+    {
+        let mut model = self.shared_model.lock().unwrap();
+        model.mutate_records(func)
+    }
+
+    pub fn push_record(&mut self, record: Record) {
+        let mut model = self.shared_model.lock().unwrap();
+        model.mutate_records(move |m| m.push(record))
+    }
+
+    pub fn extend_records(&mut self, records: Records) {
+        let mut model = self.shared_model.lock().unwrap();
+        model.mutate_records(move |m| m.extend(records))
     }
 }
 
 impl View for TagEditorView {
     fn draw(&self, printer: &Printer) {
-        self.0.draw(printer);
+        self.linear_layout.draw(printer);
     }
 
     fn layout(&mut self, constraint: XY<usize>) {
-        self.0.layout(constraint)
+        self.linear_layout.layout(constraint)
     }
 
     fn required_size(&mut self, constraint: XY<usize>) -> XY<usize> {
-        self.0.required_size(constraint)
+        self.linear_layout.required_size(constraint)
     }
 
     fn on_event(&mut self, event: Event) -> EventResult {
-        self.0.on_event(event)
+        self.linear_layout.on_event(event)
     }
 
     fn take_focus(&mut self, source: Direction) -> bool {
-        self.0.take_focus(source)
+        self.linear_layout.take_focus(source)
     }
 }
 
