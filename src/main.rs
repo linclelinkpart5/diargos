@@ -61,7 +61,6 @@ impl TagEditorView {
                     if is_first_col { is_first_col = false; }
                     else {
                         printer.print((offset_x, 0), COLUMN_SEP);
-                        printer.print((offset_x, 1), COLUMN_HEADER_SEP);
                         offset_x += COLUMN_SEP_WIDTH;
                     }
 
@@ -78,6 +77,19 @@ impl TagEditorView {
                     }
 
                     printer.print((offset_x, 0), display_title);
+
+                    offset_x += content_width;
+                }
+
+                let mut offset_x = 0;
+                let mut is_first_col = true;
+
+                for content_width in model.iter_cache() {
+                    if is_first_col { is_first_col = false; }
+                    else {
+                        printer.print((offset_x, 1), COLUMN_HEADER_SEP);
+                        offset_x += COLUMN_SEP_WIDTH;
+                    }
 
                     printer.print_hline((offset_x, 1), content_width, COLUMN_HEADER_BAR);
 
@@ -98,17 +110,17 @@ impl TagEditorView {
             .with_draw(|model, printer| {
                 let model = model.lock().unwrap();
 
-                let mut offset_x = 0;
-                let mut is_first_col = true;
+                for (offset_y, record) in model.records.iter().enumerate() {
+                    let mut offset_x = 0;
+                    let mut is_first_col = true;
 
-                for (column_key, content_width) in model.columns.keys().zip(model.iter_cache()) {
-                    if is_first_col { is_first_col = false; }
-                    else {
-                        printer.print_vline((offset_x, 0), model.records.len(), COLUMN_SEP);
-                        offset_x += COLUMN_SEP_WIDTH;
-                    }
+                    for (column_key, content_width) in model.columns.keys().zip(model.iter_cache()) {
+                        if is_first_col { is_first_col = false; }
+                        else {
+                            printer.print((offset_x, offset_y), COLUMN_SEP);
+                            offset_x += COLUMN_SEP_WIDTH;
+                        }
 
-                    for (offset_y, record) in model.records.iter().enumerate() {
                         match record.get(column_key) {
                             None => {
                                 // Print out a highlighted sentinel, to indicate a missing value.
@@ -130,9 +142,9 @@ impl TagEditorView {
                                 printer.print((offset_x, offset_y), display_value);
                             },
                         }
-                    }
 
-                    offset_x += content_width;
+                        offset_x += content_width;
+                    }
                 }
             })
             .with_required_size(|model, _constraints| {
@@ -221,12 +233,13 @@ fn main() {
         "Jake Duncan",
         "Shaun Barr",
         "Danna Shannon",
+        "日本人の氏名",
     ];
 
-    let num_records = 50;
+    let num_records = 100;
     let mut rng = rand::thread_rng();
 
-    let mut records =
+    let records =
         (0..=num_records)
         .map(|_| {
             hashmap! {
@@ -238,22 +251,18 @@ fn main() {
         .collect::<Vec<_>>()
     ;
 
-    records.insert(0, hashmap! {
-        str!("name") => str!("日本人の氏名"),
-    });
-
     let columns = indexmap! {
         str!("name") => ColumnDef {
             title: str!("Name"),
-            sizing: Sizing::Fixed(3),
+            sizing: Sizing::Auto,
         },
         str!("age") => ColumnDef {
             title: str!("Age"),
-            sizing: Sizing::Fixed(2),
+            sizing: Sizing::Auto,
         },
         str!("fave_food") => ColumnDef {
             title: str!("Favorite Food"),
-            sizing: Sizing::Fixed(20),
+            sizing: Sizing::Auto,
         },
     };
 
