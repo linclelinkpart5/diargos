@@ -60,32 +60,53 @@ impl Util {
         }
     }
 
-    pub fn skip_first_n_width(string: &str, n: usize) -> &str {
+    pub fn skip_first_n_width(string: &str, n: usize) -> (&str, bool) {
+        let mut last_width = 0;
         let mut last_i = 0;
         for (i, _) in string.char_indices() {
             let prefix = &string[..i];
-            if prefix.width_cjk() > n {
-                return &string[last_i..];
+            // println!("{:?}, {}, {}", prefix, i, prefix.width_cjk());
+            let curr_width = prefix.width_cjk();
+            if curr_width > n {
+                return if last_width < n {
+                    // Double-width character that was split across the cut boundary.
+                    // Chop off the entire character, and flag that a double-width
+                    // character was cut "in the middle".
+                    (&string[i..], true)
+                } else {
+                    (&string[last_i..], false)
+                }
             }
 
             last_i = i;
+            last_width = curr_width;
         }
 
-        ""
+        ("", false)
     }
 
-    pub fn take_first_n_width(string: &str, n: usize) -> &str {
+    pub fn take_first_n_width(string: &str, n: usize) -> (&str, bool) {
+        let mut last_width = 0;
         let mut last_i = 0;
         for (i, _) in string.char_indices() {
             let prefix = &string[..i];
-            if prefix.width_cjk() > n {
-                return &string[..last_i];
+            let curr_width = prefix.width_cjk();
+            if curr_width > n {
+                return if last_width < n {
+                    // Double-width character that was split across the cut boundary.
+                    // Chop off the entire character, and flag that a double-width
+                    // character was cut "in the middle".
+                    (&string[..last_i], true)
+                } else {
+                    (&string[..last_i], false)
+                }
             }
 
             last_i = i;
+            last_width = curr_width;
         }
 
-        string
+        (string, false)
     }
 }
 
@@ -97,31 +118,43 @@ mod test {
     fn skip_first_n_width() {
         assert_eq!(
             Util::skip_first_n_width("hello!", 3),
-            "lo!",
+            ("lo!", false),
         );
         assert_eq!(
             Util::skip_first_n_width("hello!", 0),
-            "hello!",
+            ("hello!", false),
         );
         assert_eq!(
             Util::skip_first_n_width("hello!", 6),
-            "",
+            ("", false),
         );
         assert_eq!(
             Util::skip_first_n_width("oh y̆es", 0),
-            "oh y̆es",
+            ("oh y̆es", false),
         );
         assert_eq!(
             Util::skip_first_n_width("oh y̆es", 3),
-            "y̆es",
+            ("y̆es", false),
         );
         assert_eq!(
             Util::skip_first_n_width("oh y̆es", 4),
-            "es",
+            ("es", false),
         );
         assert_eq!(
             Util::skip_first_n_width("oh y̆es", 6),
-            "",
+            ("", false),
+        );
+        assert_eq!(
+            Util::skip_first_n_width("日本人の氏名", 0),
+            ("日本人の氏名", false),
+        );
+        assert_eq!(
+            Util::skip_first_n_width("日本人の氏名", 1),
+            ("本人の氏名", true),
+        );
+        assert_eq!(
+            Util::skip_first_n_width("日本人の氏名", 2),
+            ("本人の氏名", false),
         );
     }
 
@@ -129,31 +162,43 @@ mod test {
     fn take_first_n_width() {
         assert_eq!(
             Util::take_first_n_width("hello!", 3),
-            "hel",
+            ("hel", false),
         );
         assert_eq!(
             Util::take_first_n_width("hello!", 0),
-            "",
+            ("", false),
         );
         assert_eq!(
             Util::take_first_n_width("hello!", 6),
-            "hello!",
+            ("hello!", false),
         );
         assert_eq!(
             Util::take_first_n_width("oh y̆es", 0),
-            "",
+            ("", false),
         );
         assert_eq!(
             Util::take_first_n_width("oh y̆es", 3),
-            "oh ",
+            ("oh ", false),
         );
         assert_eq!(
             Util::take_first_n_width("oh y̆es", 4),
-            "oh y̆",
+            ("oh y̆", false),
         );
         assert_eq!(
             Util::take_first_n_width("oh y̆es", 6),
-            "oh y̆es",
+            ("oh y̆es", false),
+        );
+        assert_eq!(
+            Util::take_first_n_width("日本人の氏名", 0),
+            ("", false),
+        );
+        assert_eq!(
+            Util::take_first_n_width("日本人の氏名", 1),
+            ("", true),
+        );
+        assert_eq!(
+            Util::take_first_n_width("日本人の氏名", 2),
+            ("日", false),
         );
     }
 }
