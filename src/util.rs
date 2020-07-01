@@ -59,4 +59,101 @@ impl Util {
             },
         }
     }
+
+    pub fn skip_first_n_width(string: &str, n: usize) -> &str {
+        let mut last_i = 0;
+        for (i, _) in string.char_indices() {
+            let prefix = &string[..i];
+            if prefix.width_cjk() > n {
+                return &string[last_i..];
+            }
+
+            last_i = i;
+        }
+
+        ""
+    }
+
+    pub fn take_first_n_width(string: &str, n: usize) -> &str {
+        let mut last_i = 0;
+        for (i, _) in string.char_indices() {
+            let prefix = &string[..i];
+            if prefix.width_cjk() > n {
+                return &string[..last_i];
+            }
+
+            last_i = i;
+        }
+
+        string
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn skip_first_n_width() {
+        assert_eq!(
+            Util::skip_first_n_width("hello!", 3),
+            "lo!",
+        );
+        assert_eq!(
+            Util::skip_first_n_width("hello!", 0),
+            "hello!",
+        );
+        assert_eq!(
+            Util::skip_first_n_width("hello!", 6),
+            "",
+        );
+        assert_eq!(
+            Util::skip_first_n_width("oh y̆es", 0),
+            "oh y̆es",
+        );
+        assert_eq!(
+            Util::skip_first_n_width("oh y̆es", 3),
+            "y̆es",
+        );
+        assert_eq!(
+            Util::skip_first_n_width("oh y̆es", 4),
+            "es",
+        );
+        assert_eq!(
+            Util::skip_first_n_width("oh y̆es", 6),
+            "",
+        );
+    }
+
+    #[test]
+    fn take_first_n_width() {
+        assert_eq!(
+            Util::take_first_n_width("hello!", 3),
+            "hel",
+        );
+        assert_eq!(
+            Util::take_first_n_width("hello!", 0),
+            "",
+        );
+        assert_eq!(
+            Util::take_first_n_width("hello!", 6),
+            "hello!",
+        );
+        assert_eq!(
+            Util::take_first_n_width("oh y̆es", 0),
+            "",
+        );
+        assert_eq!(
+            Util::take_first_n_width("oh y̆es", 3),
+            "oh ",
+        );
+        assert_eq!(
+            Util::take_first_n_width("oh y̆es", 4),
+            "oh y̆",
+        );
+        assert_eq!(
+            Util::take_first_n_width("oh y̆es", 6),
+            "oh y̆es",
+        );
+    }
 }

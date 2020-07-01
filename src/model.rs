@@ -4,6 +4,7 @@ use std::slice::Iter as SliceIter;
 
 use indexmap::IndexMap;
 
+use crate::consts::*;
 use crate::util::Util;
 
 #[derive(Clone, Copy)]
@@ -34,6 +35,8 @@ pub struct Model {
 
     cached_content_widths: Vec<usize>,
     needs_recache: bool,
+    header: String,
+    header_bar: String,
 }
 
 impl Model {
@@ -49,6 +52,8 @@ impl Model {
             records,
             cached_content_widths,
             needs_recache: true,
+            header: String::new(),
+            header_bar: String::new(),
         };
 
         new.recache();
@@ -77,6 +82,34 @@ impl Model {
         }
 
         assert_eq!(self.cached_content_widths.len(), self.columns.len());
+
+        // Create the cached header and header bar.
+        let mut is_first_col = true;
+        self.header.clear();
+        self.header_bar.clear();
+        for (column_def, content_width) in self.columns.values().zip(&self.cached_content_widths) {
+            if is_first_col { is_first_col = false; }
+            else {
+                self.header.push_str(COLUMN_SEP);
+                self.header_bar.push_str(COLUMN_HEADER_SEP);
+            }
+
+            let (display_title, was_trimmed) = Util::trim_display_str(
+                &column_def.title,
+                *content_width,
+                ELLIPSIS_STR_WIDTH,
+            );
+
+            let padded = if was_trimmed {
+                let elided = format!("{}{}", display_title, ELLIPSIS_STR);
+                format!("{:<width$}", elided, width = content_width)
+            } else {
+                format!("{:<width$}", display_title, width = content_width)
+            };
+
+            self.header.push_str(&padded);
+            self.header_bar.push_str(&COLUMN_HEADER_BAR.repeat(*content_width));
+        }
     }
 
     pub fn mutate_columns<F, R>(&mut self, func: F) -> R

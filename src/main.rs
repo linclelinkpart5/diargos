@@ -1,4 +1,5 @@
 
+mod consts;
 mod model;
 mod util;
 
@@ -12,6 +13,7 @@ use str_macro::str;
 use cursive::Cursive;
 use cursive::CursiveExt;
 use cursive::Printer;
+use cursive::Rect;
 use cursive::XY;
 use cursive::direction::Direction;
 use cursive::event::Event;
@@ -19,28 +21,53 @@ use cursive::event::EventResult;
 use cursive::theme::ColorStyle;
 use cursive::traits::Resizable;
 use cursive::traits::Scrollable;
+use cursive::view::ScrollBase;
 use cursive::view::View;
+use cursive::view::scroll::Core as ScrollCore;
+use cursive::view::scroll::Scroller;
 use cursive::views::Canvas;
 use cursive::views::LinearLayout;
 
-use self::model::Columns;
-use self::model::ColumnDef;
-use self::model::Model;
-use self::model::Record;
-use self::model::Records;
-use self::model::Sizing;
-use self::util::Util;
+use crate::consts::*;
+use crate::model::Columns;
+use crate::model::ColumnDef;
+use crate::model::Model;
+use crate::model::Record;
+use crate::model::Records;
+use crate::model::Sizing;
+use crate::util::Util;
 
-const ELLIPSIS_STR: &str = "⋯";
-const ELLIPSIS_STR_WIDTH: usize = 1;
+pub struct TagRecordView {
+    shared_model: Arc<Mutex<Model>>,
+    scroll_core: ScrollCore,
+}
 
-const MISSING_STR: &str = "╳";
+impl Scroller for TagRecordView {
+    fn get_scroller(&self) -> &ScrollCore {
+        &self.scroll_core
+    }
 
-const COLUMN_SEP: &str = " │ ";
-const COLUMN_HEADER_SEP: &str = "─┼─";
-const COLUMN_SEP_WIDTH: usize = 3;
+    fn get_scroller_mut(&mut self) -> &mut ScrollCore {
+        &mut self.scroll_core
+    }
+}
 
-const COLUMN_HEADER_BAR: &str = "─";
+impl View for TagRecordView {
+    fn draw(&self, printer: &Printer<'_, '_>) {
+        let offset_x = self.scroll_core.content_viewport().left();
+
+        cursive::view::scroll::draw(self, printer, |scroller, printer| {});
+    }
+
+    fn on_event(&mut self, event: Event) -> EventResult {
+        cursive::view::scroll::on_event(
+            self,
+            event,
+            |s, e| EventResult::Ignored,
+            |s, si| Rect::from_size((0, 0), (1, 1)),
+        )
+    }
+}
 
 pub struct TagEditorView {
     shared_model: Arc<Mutex<Model>>,
