@@ -34,7 +34,7 @@ pub struct Model {
     pub records: Records,
 
     cached_content_widths: Vec<usize>,
-    needs_recache: bool,
+    dirty: bool,
     header: String,
     header_bar: String,
 }
@@ -51,7 +51,7 @@ impl Model {
             columns,
             records,
             cached_content_widths,
-            needs_recache: true,
+            dirty: true,
             header: String::new(),
             header_bar: String::new(),
         };
@@ -61,10 +61,18 @@ impl Model {
         new
     }
 
+    pub fn headers(&self) -> (&str, &str) {
+        (&self.header, &self.header_bar)
+    }
+
+    pub fn needs_recache(&self) -> bool {
+        self.dirty
+    }
+
     pub fn recache(&mut self) {
         // Proceed and clear the flag if it was set.
         // Otherwise, bail out.
-        if self.needs_recache { self.needs_recache = false; }
+        if self.dirty { self.dirty = false; }
         else { return; }
 
         self.cached_content_widths.clear();
@@ -117,7 +125,7 @@ impl Model {
         F: FnOnce(&mut Columns) -> R,
     {
         let result = func(&mut self.columns);
-        self.needs_recache = true;
+        self.dirty = true;
         result
     }
 
@@ -126,7 +134,7 @@ impl Model {
         F: FnOnce(&mut Records) -> R,
     {
         let result = func(&mut self.records);
-        self.needs_recache = true;
+        self.dirty = true;
         result
     }
 

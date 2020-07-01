@@ -42,6 +42,59 @@ pub struct TagRecordView {
     scroll_core: ScrollCore,
 }
 
+impl TagRecordView {
+    pub fn new(model: Model) -> Self {
+        let shared_model = Arc::new(Mutex::new(model));
+        let scroll_core = ScrollCore::new();
+
+        Self {
+            shared_model,
+            scroll_core,
+        }
+    }
+
+    pub fn draw_records(&self, printer: &Printer) {
+        let model = self.shared_model.lock().unwrap();
+
+        for (offset_y, record) in model.records.iter().enumerate() {
+            let mut offset_x = 0;
+            let mut is_first_col = true;
+
+            for (column_key, content_width) in model.columns.keys().zip(model.iter_cache()) {
+                if is_first_col { is_first_col = false; }
+                else {
+                    printer.print((offset_x, offset_y), COLUMN_SEP);
+                    offset_x += COLUMN_SEP_WIDTH;
+                }
+
+                match record.get(column_key) {
+                    None => {
+                        // Print out a highlighted sentinel, to indicate a missing value.
+                        printer.with_color(ColorStyle::highlight_inactive(), |pr| {
+                            pr.print_hline((offset_x, offset_y), content_width, MISSING_STR);
+                        });
+                    },
+                    Some(value) => {
+                        let (display_value, was_trimmed) = Util::trim_display_str(
+                            value,
+                            content_width,
+                            ELLIPSIS_STR_WIDTH,
+                        );
+
+                        if was_trimmed {
+                            printer.print_hline((offset_x, offset_y), content_width, ELLIPSIS_STR);
+                        }
+
+                        printer.print((offset_x, offset_y), display_value);
+                    },
+                }
+
+                offset_x += content_width;
+            }
+        }
+    }
+}
+
 impl Scroller for TagRecordView {
     fn get_scroller(&self) -> &ScrollCore {
         &self.scroll_core
@@ -54,17 +107,64 @@ impl Scroller for TagRecordView {
 
 impl View for TagRecordView {
     fn draw(&self, printer: &Printer<'_, '_>) {
-        let offset_x = self.scroll_core.content_viewport().left();
+        let offset = self.scroll_core.content_viewport();
 
-        cursive::view::scroll::draw(self, printer, |scroller, printer| {});
+        cursive::view::scroll::draw(
+            self,
+            printer,
+            |scroller, sub_printer| {
+                // This sub block is needed to avoid a deadlock.
+                {
+                    let model = scroller.shared_model.lock().unwrap();
+
+                    let (header, header_bar) = model.headers();
+
+                    // Draw the header and the header bar at the top vertical positions,
+                    // but all the way to the left, so they scroll with the content.
+                    sub_printer.print((0, offset.top()), header);
+                    sub_printer.print((0, offset.top() + 1), header_bar);
+                }
+
+                scroller.draw_records(&sub_printer.offset((0, offset.top() + 2)));
+            }
+        );
+    }
+
+    fn layout(&mut self, size: XY<usize>) {
+        {
+            let mut model = self.shared_model.lock().unwrap();
+            model.recache();
+        }
+
+        cursive::view::scroll::layout(
+            self,
+            size,
+            true,
+            |_scroller, _inner_size| { /* Already doing recache earlier. */ },
+            |scroller, constraint| { scroller.required_size(constraint) },
+        );
+    }
+
+    fn required_size(&mut self, _constraint: XY<usize>) -> XY<usize> {
+        let mut model = self.shared_model.lock().unwrap();
+        model.recache();
+
+        let x = model.total_display_width(COLUMN_SEP_WIDTH);
+        let y = model.records.len() + 2;
+
+        XY::new(x, y)
+    }
+
+    fn take_focus(&mut self, _source: Direction) -> bool {
+        true
     }
 
     fn on_event(&mut self, event: Event) -> EventResult {
         cursive::view::scroll::on_event(
             self,
             event,
-            |s, e| EventResult::Ignored,
-            |s, si| Rect::from_size((0, 0), (1, 1)),
+            |_scroller, _sub_event| EventResult::Ignored,
+            |_scroller, _sub_area| Rect::from_size((0, 0), (1, 1)),
         )
     }
 }
@@ -308,6 +408,8 @@ fn main() {
                 str!("name") => names.choose(&mut rng).unwrap().to_string(),
                 str!("age") => str!((18..=70).choose(&mut rng).unwrap()),
                 str!("fave_food") => fave_foods.choose(&mut rng).unwrap().to_string(),
+                str!("score") => str!((0..=100).choose(&mut rng).unwrap()),
+                str!("is_outgoing") => str!(rand::random::<bool>()),
             }
         })
         .collect::<Vec<_>>()
@@ -316,29 +418,38 @@ fn main() {
     let columns = indexmap! {
         str!("name") => ColumnDef {
             title: str!("Name"),
-            sizing: Sizing::Auto,
+            sizing: Sizing::Fixed(50),
         },
         str!("age") => ColumnDef {
             title: str!("Age"),
-            sizing: Sizing::Auto,
+            sizing: Sizing::Fixed(50),
         },
         str!("fave_food") => ColumnDef {
             title: str!("Favorite Food"),
+            sizing: Sizing::Fixed(50),
+        },
+        str!("score") => ColumnDef {
+            title: str!("Score"),
             sizing: Sizing::Auto,
+        },
+        str!("is_outgoing") => ColumnDef {
+            title: str!("Is Outgoing?"),
+            sizing: Sizing::Fixed(50),
         },
     };
 
     let model = Model::with_data(columns, records);
 
-    let tag_editor_view = TagEditorView::new(model);
+    // let main_view = TagEditorView::new(model);
+    let main_view = TagRecordView::new(model);
 
     let mut siv = Cursive::default();
 
     siv.add_layer(
-        tag_editor_view
+        main_view
         .scrollable()
         .scroll_x(true)
-        .fixed_size((30, 20))
+        // .fixed_size((30, 20))
     );
 
     siv.run();
