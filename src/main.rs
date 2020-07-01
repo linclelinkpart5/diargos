@@ -417,7 +417,8 @@ fn main() {
 
     let columns = indexmap! {
         str!("name") => ColumnDef {
-            title: str!("Name"),
+            // title: str!("Name"),
+            title: str!("日本人の氏名"),
             sizing: Sizing::Fixed(50),
         },
         str!("age") => ColumnDef {
