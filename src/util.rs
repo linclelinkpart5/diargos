@@ -1,12 +1,40 @@
 
+use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
 use crate::model::Columns;
 use crate::model::Records;
 
+pub enum TrimResult {
+    Untrimmed,
+    TrimmedClean,
+    TrimmedSplit,
+}
+
 pub struct Util;
 
 impl Util {
+    pub fn new_trim_display(original_str: &str, content_width: usize, ellipsis_width: usize) -> (&str, TrimResult) {
+        let mut curr_width = 0;
+
+        for (i, ch) in original_str.char_indices() {
+            let last_width = curr_width;
+
+            curr_width += ch.width_cjk().unwrap_or(0);
+
+            if curr_width > content_width {
+                return if last_width < content_width {
+                    // Split multiwidth character.
+                    (&original_str[..i], TrimResult::TrimmedSplit)
+                } else {
+                    (&original_str[..i], TrimResult::TrimmedClean)
+                }
+            }
+        }
+
+        (original_str, TrimResult::Untrimmed)
+    }
+
     pub fn max_column_content_width(column_key: &str, columns: &Columns, records: &Records) -> usize {
         let mut max_seen = match columns.get(column_key) {
             Some(column_def) => column_def.title.width_cjk(),

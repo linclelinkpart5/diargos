@@ -129,11 +129,6 @@ impl View for TagRecordView {
     }
 
     fn layout(&mut self, size: XY<usize>) {
-        {
-            let mut model = self.shared_model.lock().unwrap();
-            model.recache();
-        }
-
         cursive::view::scroll::layout(
             self,
             size,
@@ -167,193 +162,193 @@ impl View for TagRecordView {
     }
 }
 
-pub struct TagEditorView {
-    shared_model: Arc<Mutex<Model>>,
-    linear_layout: LinearLayout,
-}
+// pub struct TagEditorView {
+//     shared_model: Arc<Mutex<Model>>,
+//     linear_layout: LinearLayout,
+// }
 
-impl TagEditorView {
-    pub fn new(model: Model) -> Self {
-        let shared_model = Arc::new(Mutex::new(model));
+// impl TagEditorView {
+//     pub fn new(model: Model) -> Self {
+//         let shared_model = Arc::new(Mutex::new(model));
 
-        let columns_canvas =
-            Canvas::new(shared_model.clone())
-            .with_layout(|model, _constraints| {
-                let mut model = model.lock().unwrap();
-                model.recache();
-            })
-            .with_draw(|model, printer| {
-                let model = model.lock().unwrap();
+//         let columns_canvas =
+//             Canvas::new(shared_model.clone())
+//             .with_layout(|model, _constraints| {
+//                 let mut model = model.lock().unwrap();
+//                 model.recache();
+//             })
+//             .with_draw(|model, printer| {
+//                 let model = model.lock().unwrap();
 
-                let mut offset_x = 0;
-                let mut is_first_col = true;
+//                 let mut offset_x = 0;
+//                 let mut is_first_col = true;
 
-                for (column_def, content_width) in model.columns.values().zip(model.iter_cache()) {
-                    if is_first_col { is_first_col = false; }
-                    else {
-                        printer.print((offset_x, 0), COLUMN_SEP);
-                        offset_x += COLUMN_SEP_WIDTH;
-                    }
+//                 for (column_def, content_width) in model.columns.values().zip(model.iter_cache()) {
+//                     if is_first_col { is_first_col = false; }
+//                     else {
+//                         printer.print((offset_x, 0), COLUMN_SEP);
+//                         offset_x += COLUMN_SEP_WIDTH;
+//                     }
 
-                    let title = &column_def.title;
+//                     let title = &column_def.title;
 
-                    let (display_title, was_trimmed) = Util::trim_display_str(
-                        title,
-                        content_width,
-                        ELLIPSIS_STR_WIDTH,
-                    );
+//                     let (display_title, was_trimmed) = Util::trim_display_str(
+//                         title,
+//                         content_width,
+//                         ELLIPSIS_STR_WIDTH,
+//                     );
 
-                    if was_trimmed {
-                        printer.print_hline((offset_x, 0), content_width, ELLIPSIS_STR);
-                    }
+//                     if was_trimmed {
+//                         printer.print_hline((offset_x, 0), content_width, ELLIPSIS_STR);
+//                     }
 
-                    printer.print((offset_x, 0), display_title);
+//                     printer.print((offset_x, 0), display_title);
 
-                    offset_x += content_width;
-                }
+//                     offset_x += content_width;
+//                 }
 
-                let mut offset_x = 0;
-                let mut is_first_col = true;
+//                 let mut offset_x = 0;
+//                 let mut is_first_col = true;
 
-                for content_width in model.iter_cache() {
-                    if is_first_col { is_first_col = false; }
-                    else {
-                        printer.print((offset_x, 1), COLUMN_HEADER_SEP);
-                        offset_x += COLUMN_SEP_WIDTH;
-                    }
+//                 for content_width in model.iter_cache() {
+//                     if is_first_col { is_first_col = false; }
+//                     else {
+//                         printer.print((offset_x, 1), COLUMN_HEADER_SEP);
+//                         offset_x += COLUMN_SEP_WIDTH;
+//                     }
 
-                    printer.print_hline((offset_x, 1), content_width, COLUMN_HEADER_BAR);
+//                     printer.print_hline((offset_x, 1), content_width, COLUMN_HEADER_BAR);
 
-                    offset_x += content_width;
-                }
-            })
-            .with_required_size(|model, _constraints| {
-                let mut model = model.lock().unwrap();
-                model.recache();
-                let total_width = model.total_display_width(COLUMN_SEP_WIDTH);
+//                     offset_x += content_width;
+//                 }
+//             })
+//             .with_required_size(|model, _constraints| {
+//                 let mut model = model.lock().unwrap();
+//                 model.recache();
+//                 let total_width = model.total_display_width(COLUMN_SEP_WIDTH);
 
-                (total_width, 2).into()
-            })
-        ;
+//                 (total_width, 2).into()
+//             })
+//         ;
 
-        let records_canvas =
-            Canvas::new(shared_model.clone())
-            .with_draw(|model, printer| {
-                let model = model.lock().unwrap();
+//         let records_canvas =
+//             Canvas::new(shared_model.clone())
+//             .with_draw(|model, printer| {
+//                 let model = model.lock().unwrap();
 
-                for (offset_y, record) in model.records.iter().enumerate() {
-                    let mut offset_x = 0;
-                    let mut is_first_col = true;
+//                 for (offset_y, record) in model.records.iter().enumerate() {
+//                     let mut offset_x = 0;
+//                     let mut is_first_col = true;
 
-                    for (column_key, content_width) in model.columns.keys().zip(model.iter_cache()) {
-                        if is_first_col { is_first_col = false; }
-                        else {
-                            printer.print((offset_x, offset_y), COLUMN_SEP);
-                            offset_x += COLUMN_SEP_WIDTH;
-                        }
+//                     for (column_key, content_width) in model.columns.keys().zip(model.iter_cache()) {
+//                         if is_first_col { is_first_col = false; }
+//                         else {
+//                             printer.print((offset_x, offset_y), COLUMN_SEP);
+//                             offset_x += COLUMN_SEP_WIDTH;
+//                         }
 
-                        match record.get(column_key) {
-                            None => {
-                                // Print out a highlighted sentinel, to indicate a missing value.
-                                printer.with_color(ColorStyle::highlight_inactive(), |pr| {
-                                    pr.print_hline((offset_x, offset_y), content_width, MISSING_STR);
-                                });
-                            },
-                            Some(value) => {
-                                let (display_value, was_trimmed) = Util::trim_display_str(
-                                    value,
-                                    content_width,
-                                    ELLIPSIS_STR_WIDTH,
-                                );
+//                         match record.get(column_key) {
+//                             None => {
+//                                 // Print out a highlighted sentinel, to indicate a missing value.
+//                                 printer.with_color(ColorStyle::highlight_inactive(), |pr| {
+//                                     pr.print_hline((offset_x, offset_y), content_width, MISSING_STR);
+//                                 });
+//                             },
+//                             Some(value) => {
+//                                 let (display_value, was_trimmed) = Util::trim_display_str(
+//                                     value,
+//                                     content_width,
+//                                     ELLIPSIS_STR_WIDTH,
+//                                 );
 
-                                if was_trimmed {
-                                    printer.print_hline((offset_x, offset_y), content_width, ELLIPSIS_STR);
-                                }
+//                                 if was_trimmed {
+//                                     printer.print_hline((offset_x, offset_y), content_width, ELLIPSIS_STR);
+//                                 }
 
-                                printer.print((offset_x, offset_y), display_value);
-                            },
-                        }
+//                                 printer.print((offset_x, offset_y), display_value);
+//                             },
+//                         }
 
-                        offset_x += content_width;
-                    }
-                }
-            })
-            .with_required_size(|model, _constraints| {
-                let mut model = model.lock().unwrap();
-                model.recache();
-                let total_width = model.total_display_width(COLUMN_SEP_WIDTH);
+//                         offset_x += content_width;
+//                     }
+//                 }
+//             })
+//             .with_required_size(|model, _constraints| {
+//                 let mut model = model.lock().unwrap();
+//                 model.recache();
+//                 let total_width = model.total_display_width(COLUMN_SEP_WIDTH);
 
-                (total_width, model.records.len()).into()
-            })
-            .scrollable()
-            .scroll_x(false)
-            .scroll_y(true)
-        ;
+//                 (total_width, model.records.len()).into()
+//             })
+//             .scrollable()
+//             .scroll_x(false)
+//             .scroll_y(true)
+//         ;
 
-        // TODO: See if there is an option to allow the records `Canvas` to have
-        //       its scrollbar always visible.
-        // TODO: Drawing vertically one column at a time might be slow, test out
-        //       horizontal drawing.
-        let linear_layout =
-            LinearLayout::vertical()
-            .child(columns_canvas)
-            .child(records_canvas)
-        ;
+//         // TODO: See if there is an option to allow the records `Canvas` to have
+//         //       its scrollbar always visible.
+//         // TODO: Drawing vertically one column at a time might be slow, test out
+//         //       horizontal drawing.
+//         let linear_layout =
+//             LinearLayout::vertical()
+//             .child(columns_canvas)
+//             .child(records_canvas)
+//         ;
 
-        Self {
-            shared_model,
-            linear_layout,
-        }
-    }
+//         Self {
+//             shared_model,
+//             linear_layout,
+//         }
+//     }
 
-    pub fn mutate_columns<F, R>(&mut self, func: F) -> R
-    where
-        F: FnOnce(&mut Columns) -> R,
-    {
-        let mut model = self.shared_model.lock().unwrap();
-        model.mutate_columns(func)
-    }
+//     pub fn mutate_columns<F, R>(&mut self, func: F) -> R
+//     where
+//         F: FnOnce(&mut Columns) -> R,
+//     {
+//         let mut model = self.shared_model.lock().unwrap();
+//         model.mutate_columns(func)
+//     }
 
-    pub fn mutate_records<F, R>(&mut self, func: F) -> R
-    where
-        F: FnOnce(&mut Records) -> R,
-    {
-        let mut model = self.shared_model.lock().unwrap();
-        model.mutate_records(func)
-    }
+//     pub fn mutate_records<F, R>(&mut self, func: F) -> R
+//     where
+//         F: FnOnce(&mut Records) -> R,
+//     {
+//         let mut model = self.shared_model.lock().unwrap();
+//         model.mutate_records(func)
+//     }
 
-    pub fn push_record(&mut self, record: Record) {
-        let mut model = self.shared_model.lock().unwrap();
-        model.mutate_records(move |m| m.push(record))
-    }
+//     pub fn push_record(&mut self, record: Record) {
+//         let mut model = self.shared_model.lock().unwrap();
+//         model.mutate_records(move |m| m.push(record))
+//     }
 
-    pub fn extend_records(&mut self, records: Records) {
-        let mut model = self.shared_model.lock().unwrap();
-        model.mutate_records(move |m| m.extend(records))
-    }
-}
+//     pub fn extend_records(&mut self, records: Records) {
+//         let mut model = self.shared_model.lock().unwrap();
+//         model.mutate_records(move |m| m.extend(records))
+//     }
+// }
 
-impl View for TagEditorView {
-    fn draw(&self, printer: &Printer) {
-        self.linear_layout.draw(printer);
-    }
+// impl View for TagEditorView {
+//     fn draw(&self, printer: &Printer) {
+//         self.linear_layout.draw(printer);
+//     }
 
-    fn layout(&mut self, constraint: XY<usize>) {
-        self.linear_layout.layout(constraint)
-    }
+//     fn layout(&mut self, constraint: XY<usize>) {
+//         self.linear_layout.layout(constraint)
+//     }
 
-    fn required_size(&mut self, constraint: XY<usize>) -> XY<usize> {
-        self.linear_layout.required_size(constraint)
-    }
+//     fn required_size(&mut self, constraint: XY<usize>) -> XY<usize> {
+//         self.linear_layout.required_size(constraint)
+//     }
 
-    fn on_event(&mut self, event: Event) -> EventResult {
-        self.linear_layout.on_event(event)
-    }
+//     fn on_event(&mut self, event: Event) -> EventResult {
+//         self.linear_layout.on_event(event)
+//     }
 
-    fn take_focus(&mut self, source: Direction) -> bool {
-        self.linear_layout.take_focus(source)
-    }
-}
+//     fn take_focus(&mut self, source: Direction) -> bool {
+//         self.linear_layout.take_focus(source)
+//     }
+// }
 
 fn main() {
     use rand::seq::SliceRandom;
