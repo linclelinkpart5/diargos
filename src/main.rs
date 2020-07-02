@@ -107,25 +107,23 @@ impl Scroller for TagRecordView {
 
 impl View for TagRecordView {
     fn draw(&self, printer: &Printer<'_, '_>) {
-        let offset = self.scroll_core.content_viewport();
+        // This sub block is needed to avoid a deadlock.
+        {
+            let model = self.shared_model.lock().unwrap();
+
+            let (header, header_bar) = model.headers();
+
+            // Draw the header and the header bar at the top vertical positions,
+            // but all the way to the left, so they scroll with the content.
+            printer.print((0, 0), header);
+            printer.print((0, 1), header_bar);
+        }
 
         cursive::view::scroll::draw(
             self,
-            printer,
+            &printer.offset((0, 2)),
             |scroller, sub_printer| {
-                // This sub block is needed to avoid a deadlock.
-                {
-                    let model = scroller.shared_model.lock().unwrap();
-
-                    let (header, header_bar) = model.headers();
-
-                    // Draw the header and the header bar at the top vertical positions,
-                    // but all the way to the left, so they scroll with the content.
-                    sub_printer.print((0, offset.top()), header);
-                    sub_printer.print((0, offset.top() + 1), header_bar);
-                }
-
-                scroller.draw_records(&sub_printer.offset((0, offset.top() + 2)));
+                scroller.draw_records(sub_printer);
             }
         );
     }
@@ -417,8 +415,7 @@ fn main() {
 
     let columns = indexmap! {
         str!("name") => ColumnDef {
-            // title: str!("Name"),
-            title: str!("日本人の氏名"),
+            title: str!("Name"),
             sizing: Sizing::Fixed(50),
         },
         str!("age") => ColumnDef {
@@ -448,8 +445,9 @@ fn main() {
 
     siv.add_layer(
         main_view
-        .scrollable()
-        .scroll_x(true)
+        // .scrollable()
+        // .scroll_x(true)
+        // .scroll_x(false)
         // .fixed_size((30, 20))
     );
 
