@@ -5,16 +5,32 @@ use unicode_width::UnicodeWidthStr;
 use crate::model::Columns;
 use crate::model::Records;
 
+#[derive(Copy, Clone)]
 pub enum TrimResult {
     Untrimmed,
-    TrimmedClean,
-    TrimmedSplit,
+    Trimmed(usize),
+}
+
+impl TrimResult {
+    pub fn padding(&self) -> usize {
+        match self {
+            Self::Untrimmed => 0,
+            Self::Trimmed(padding) => *padding,
+        }
+    }
+
+    pub fn was_trimmed(&self) -> bool {
+        match self {
+            Self::Untrimmed => false,
+            Self::Trimmed(..) => true,
+        }
+    }
 }
 
 pub struct Util;
 
 impl Util {
-    pub fn new_trim_display(original_str: &str, content_width: usize, ellipsis_width: usize) -> (&str, TrimResult) {
+    pub fn new_trim_display(original_str: &str, target_width: usize) -> (&str, TrimResult) {
         let mut curr_width = 0;
 
         for (i, ch) in original_str.char_indices() {
@@ -22,16 +38,24 @@ impl Util {
 
             curr_width += ch.width_cjk().unwrap_or(0);
 
-            if curr_width > content_width {
-                return if last_width < content_width {
-                    // Split multiwidth character.
-                    (&original_str[..i], TrimResult::TrimmedSplit)
-                } else {
-                    (&original_str[..i], TrimResult::TrimmedClean)
-                }
+            if curr_width > target_width {
+                return
+                    // Tried to trim off part of a multiwidth character.
+                    // This means that the target width lies in between a character.
+                    // Remove the whole character and flag as such, noting how
+                    // much leftover padding is needed.
+                    if last_width < target_width {
+                        (&original_str[..i], TrimResult::Trimmed(target_width - last_width))
+                    }
+                    // Trim the string as normal.
+                    else {
+                        (&original_str[..i], TrimResult::Trimmed(0))
+                    }
+                ;
             }
         }
 
+        // The string does not need trimming, just return unchanged.
         (original_str, TrimResult::Untrimmed)
     }
 
