@@ -121,13 +121,17 @@ impl View for TagRecordView {
         cursive::view::scroll::layout(
             self,
             size,
-            true,
+            self.needs_relayout(),
             |scroller, _inner_size| {
                 let mut model = scroller.shared_model.lock().unwrap();
                 model.recache();
             },
             |scroller, constraint| { scroller.required_size(constraint) },
         );
+    }
+
+    fn needs_relayout(&self) -> bool {
+        self.shared_model.lock().unwrap().needs_recache()
     }
 
     fn required_size(&mut self, _constraint: XY<usize>) -> XY<usize> {
@@ -140,10 +144,6 @@ impl View for TagRecordView {
         XY::new(x, y)
     }
 
-    fn take_focus(&mut self, _source: Direction) -> bool {
-        true
-    }
-
     fn on_event(&mut self, event: Event) -> EventResult {
         cursive::view::scroll::on_event(
             self,
@@ -151,6 +151,10 @@ impl View for TagRecordView {
             |_scroller, _sub_event| EventResult::Ignored,
             |_scroller, _sub_area| Rect::from_size((0, 0), (1, 1)),
         )
+    }
+
+    fn take_focus(&mut self, _source: Direction) -> bool {
+        true
     }
 }
 
@@ -432,10 +436,10 @@ fn main() {
 
     siv.add_layer(
         main_view
-        .scrollable()
-        .scroll_x(true)
-        .scroll_y(false)
-        .fixed_size((30, 20))
+        // .scrollable()
+        // .scroll_x(true)
+        // .scroll_y(false)
+        // .fixed_size((30, 20))
     );
 
     siv.run();
