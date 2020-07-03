@@ -19,21 +19,13 @@ use cursive::direction::Direction;
 use cursive::event::Event;
 use cursive::event::EventResult;
 use cursive::theme::ColorStyle;
-use cursive::traits::Resizable;
-use cursive::traits::Scrollable;
-use cursive::view::ScrollBase;
 use cursive::view::View;
 use cursive::view::scroll::Core as ScrollCore;
 use cursive::view::scroll::Scroller;
-use cursive::views::Canvas;
-use cursive::views::LinearLayout;
 
 use crate::consts::*;
-use crate::model::Columns;
 use crate::model::ColumnDef;
 use crate::model::Model;
-use crate::model::Record;
-use crate::model::Records;
 use crate::model::Sizing;
 use crate::util::Util;
 
@@ -75,17 +67,12 @@ impl TagRecordView {
                         });
                     },
                     Some(value) => {
-                        let (display_value, was_trimmed) = Util::trim_display_str(
-                            value,
-                            content_width,
-                            ELLIPSIS_STR_WIDTH,
-                        );
+                        // Rough approximation for capacity.
+                        let mut buffer = String::with_capacity(content_width);
 
-                        if was_trimmed {
-                            printer.print_hline((offset_x, offset_y), content_width, ELLIPSIS_STR);
-                        }
+                        Util::extend_with_fitted_str(&mut buffer, value, content_width);
 
-                        printer.print((offset_x, offset_y), display_value);
+                        printer.print((offset_x, offset_y), &buffer);
                     },
                 }
 
@@ -411,7 +398,7 @@ fn main() {
     let columns = indexmap! {
         str!("name") => ColumnDef {
             title: str!("Name"),
-            sizing: Sizing::Fixed(50),
+            sizing: Sizing::Fixed(6),
         },
         str!("age") => ColumnDef {
             title: str!("Age"),

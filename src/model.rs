@@ -95,29 +95,28 @@ impl Model {
         let mut is_first_col = true;
         self.header.clear();
         self.header_bar.clear();
-        for (column_def, content_width) in self.columns.values().zip(&self.cached_content_widths) {
+
+        let content_widths = self.cached_content_widths.iter().cloned();
+
+        for (column_def, content_width) in self.columns.values().zip(content_widths) {
             if is_first_col { is_first_col = false; }
             else {
                 self.header.push_str(COLUMN_SEP);
                 self.header_bar.push_str(COLUMN_HEADER_SEP);
             }
 
-            let (display_title, was_trimmed) = Util::trim_display_str(
-                &column_def.title,
-                *content_width,
-                ELLIPSIS_STR_WIDTH,
-            );
+            Util::extend_with_fitted_str(&mut self.header, &column_def.title, content_width);
 
-            let padded = if was_trimmed {
-                let elided = format!("{}{}", display_title, ELLIPSIS_STR);
-                format!("{:<width$}", elided, width = content_width)
-            } else {
-                format!("{:<width$}", display_title, width = content_width)
-            };
-
-            self.header.push_str(&padded);
-            self.header_bar.push_str(&COLUMN_HEADER_BAR.repeat(*content_width));
+            // Extend the header bar.
+            for _ in 0..content_width {
+                self.header_bar.push_str(COLUMN_HEADER_BAR);
+            }
         }
+
+        // println!("{}", self.header);
+        // println!("{}", self.header_bar);
+
+        // assert_eq!(self.header.width_cjk(), self.header_bar.width_cjk());
     }
 
     pub fn mutate_columns<F, R>(&mut self, func: F) -> R
