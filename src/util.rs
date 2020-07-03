@@ -5,7 +5,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::model::Columns;
 use crate::model::Records;
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum TrimResult {
     Untrimmed,
     Trimmed(usize),
@@ -251,6 +251,50 @@ mod test {
         assert_eq!(
             Util::take_first_n_width("日本人の氏名", 2),
             ("日", false),
+        );
+    }
+
+    #[test]
+    fn new_trim_display() {
+        assert_eq!(
+            Util::new_trim_display("hello!", 3),
+            ("hel", TrimResult::Trimmed(0)),
+        );
+        assert_eq!(
+            Util::new_trim_display("hello!", 0),
+            ("", TrimResult::Trimmed(0)),
+        );
+        assert_eq!(
+            Util::new_trim_display("hello!", 6),
+            ("hello!", TrimResult::Untrimmed),
+        );
+        assert_eq!(
+            Util::new_trim_display("oh y̆es", 0),
+            ("", TrimResult::Trimmed(0)),
+        );
+        assert_eq!(
+            Util::new_trim_display("oh y̆es", 3),
+            ("oh ", TrimResult::Trimmed(0)),
+        );
+        assert_eq!(
+            Util::new_trim_display("oh y̆es", 4),
+            ("oh y̆", TrimResult::Trimmed(0)),
+        );
+        assert_eq!(
+            Util::new_trim_display("oh y̆es", 6),
+            ("oh y̆es", TrimResult::Untrimmed),
+        );
+        assert_eq!(
+            Util::new_trim_display("日本人の氏名", 0),
+            ("", TrimResult::Trimmed(0)),
+        );
+        assert_eq!(
+            Util::new_trim_display("日本人の氏名", 1),
+            ("", TrimResult::Trimmed(1)),
+        );
+        assert_eq!(
+            Util::new_trim_display("日本人の氏名", 2),
+            ("日", TrimResult::Trimmed(0)),
         );
     }
 }
