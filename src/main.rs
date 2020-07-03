@@ -19,6 +19,8 @@ use cursive::direction::Direction;
 use cursive::event::Event;
 use cursive::event::EventResult;
 use cursive::theme::ColorStyle;
+use cursive::traits::Resizable;
+use cursive::traits::Scrollable;
 use cursive::view::View;
 use cursive::view::scroll::Core as ScrollCore;
 use cursive::view::scroll::Scroller;
@@ -120,7 +122,10 @@ impl View for TagRecordView {
             self,
             size,
             true,
-            |_scroller, _inner_size| { /* Already doing recache earlier. */ },
+            |scroller, _inner_size| {
+                let mut model = scroller.shared_model.lock().unwrap();
+                model.recache();
+            },
             |scroller, constraint| { scroller.required_size(constraint) },
         );
     }
@@ -398,7 +403,7 @@ fn main() {
     let columns = indexmap! {
         str!("name") => ColumnDef {
             title: str!("Name"),
-            sizing: Sizing::Fixed(6),
+            sizing: Sizing::Auto,
         },
         str!("age") => ColumnDef {
             title: str!("Age"),
@@ -406,7 +411,7 @@ fn main() {
         },
         str!("fave_food") => ColumnDef {
             title: str!("Favorite Food"),
-            sizing: Sizing::Fixed(50),
+            sizing: Sizing::Fixed(500),
         },
         str!("score") => ColumnDef {
             title: str!("Score"),
@@ -427,10 +432,10 @@ fn main() {
 
     siv.add_layer(
         main_view
-        // .scrollable()
-        // .scroll_x(true)
-        // .scroll_x(false)
-        // .fixed_size((30, 20))
+        .scrollable()
+        .scroll_x(true)
+        .scroll_y(false)
+        .fixed_size((30, 20))
     );
 
     siv.run();

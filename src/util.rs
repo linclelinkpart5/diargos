@@ -9,7 +9,7 @@ use crate::model::Records;
 pub struct Util;
 
 impl Util {
-    pub fn new_trim_display(original_str: &str, target_width: usize) -> (&str, usize, bool) {
+    pub fn trim_display_str(original_str: &str, target_width: usize) -> (&str, usize, bool) {
         let mut curr_width = 0;
 
         for (i, ch) in original_str.char_indices() {
@@ -53,7 +53,7 @@ impl Util {
             if original_width > content_width {
                 let trimmed_width = content_width.saturating_sub(ELLIPSIS_STR_WIDTH);
                 let (trimmed_str, internal_padding, was_trimmed) =
-                    Util::new_trim_display(original_str, trimmed_width)
+                    Util::trim_display_str(original_str, trimmed_width)
                 ;
 
                 (trimmed_str, internal_padding, was_trimmed)
@@ -216,45 +216,45 @@ mod test {
     // }
 
     #[test]
-    fn new_trim_display() {
+    fn trim_display_str() {
         assert_eq!(
-            Util::new_trim_display("hello!", 3),
+            Util::trim_display_str("hello!", 3),
             ("hel", 0, true),
         );
         assert_eq!(
-            Util::new_trim_display("hello!", 0),
+            Util::trim_display_str("hello!", 0),
             ("", 0, true),
         );
         assert_eq!(
-            Util::new_trim_display("hello!", 6),
+            Util::trim_display_str("hello!", 6),
             ("hello!", 0, false),
         );
         assert_eq!(
-            Util::new_trim_display("oh y̆es", 0),
+            Util::trim_display_str("oh y̆es", 0),
             ("", 0, true),
         );
         assert_eq!(
-            Util::new_trim_display("oh y̆es", 3),
+            Util::trim_display_str("oh y̆es", 3),
             ("oh ", 0, true),
         );
         assert_eq!(
-            Util::new_trim_display("oh y̆es", 4),
+            Util::trim_display_str("oh y̆es", 4),
             ("oh y̆", 0, true),
         );
         assert_eq!(
-            Util::new_trim_display("oh y̆es", 6),
+            Util::trim_display_str("oh y̆es", 6),
             ("oh y̆es", 0, false),
         );
         assert_eq!(
-            Util::new_trim_display("日本人の氏名", 0),
+            Util::trim_display_str("日本人の氏名", 0),
             ("", 0, true),
         );
         assert_eq!(
-            Util::new_trim_display("日本人の氏名", 1),
+            Util::trim_display_str("日本人の氏名", 1),
             ("", 1, true),
         );
         assert_eq!(
-            Util::new_trim_display("日本人の氏名", 2),
+            Util::trim_display_str("日本人の氏名", 2),
             ("日", 0, true),
         );
     }
