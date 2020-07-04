@@ -39,7 +39,7 @@ pub struct TagRecordView {
 impl TagRecordView {
     pub fn new(model: Model) -> Self {
         let shared_model = Arc::new(Mutex::new(model));
-        let scroll_core = ScrollCore::new();
+        let scroll_core = ScrollCore::new().scroll_x(true);
 
         Self {
             shared_model,
@@ -96,6 +96,8 @@ impl Scroller for TagRecordView {
 
 impl View for TagRecordView {
     fn draw(&self, printer: &Printer<'_, '_>) {
+        let content_viewport = self.scroll_core.content_viewport();
+
         // This sub block is needed to avoid a deadlock.
         {
             let model = self.shared_model.lock().unwrap();
@@ -104,8 +106,10 @@ impl View for TagRecordView {
 
             // Draw the header and the header bar at the top vertical positions,
             // but all the way to the left, so they scroll with the content.
-            printer.print((0, 0), header);
-            printer.print((0, 1), header_bar);
+            let left_offset_printer = printer.content_offset((content_viewport.left(), 0));
+
+            left_offset_printer.print((0, 0), header);
+            left_offset_printer.print((0, 1), header_bar);
         }
 
         cursive::view::scroll::draw(
@@ -406,16 +410,16 @@ fn main() {
 
     let columns = indexmap! {
         str!("name") => ColumnDef {
-            title: str!("Name"),
-            sizing: Sizing::Auto,
+            title: str!("日本人の氏名"),
+            sizing: Sizing::Fixed(6),
         },
         str!("age") => ColumnDef {
             title: str!("Age"),
-            sizing: Sizing::Fixed(50),
+            sizing: Sizing::Fixed(80),
         },
         str!("fave_food") => ColumnDef {
             title: str!("Favorite Food"),
-            sizing: Sizing::Fixed(500),
+            sizing: Sizing::Fixed(80),
         },
         str!("score") => ColumnDef {
             title: str!("Score"),
