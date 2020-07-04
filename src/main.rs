@@ -24,12 +24,124 @@ use cursive::traits::Scrollable;
 use cursive::view::View;
 use cursive::view::scroll::Core as ScrollCore;
 use cursive::view::scroll::Scroller;
+use cursive::views::Canvas;
+use cursive::views::ScrollView;
 
 use crate::consts::*;
 use crate::model::ColumnDef;
 use crate::model::Model;
 use crate::model::Sizing;
 use crate::util::Util;
+
+// pub struct TagRecordView {
+//     shared_model: Arc<Mutex<Model>>,
+//     scroll_view: ScrollView<Canvas<Arc<Mutex<Model>>>>,
+// }
+
+// impl TagRecordView {
+//     pub fn new(model: Model) -> Self {
+//         let shared_model = Arc::new(Mutex::new(model));
+
+//         let canvas =
+//             Canvas::new(shared_model.clone())
+//             .with_draw(|shared_model, printer| {
+//                 let model = shared_model.lock().unwrap();
+
+//                 for (offset_y, record) in model.records.iter().enumerate() {
+//                     let mut offset_x = 0;
+//                     let mut is_first_col = true;
+
+//                     for (column_key, content_width) in model.columns.keys().zip(model.iter_cache()) {
+//                         if is_first_col { is_first_col = false; }
+//                         else {
+//                             printer.print((offset_x, offset_y), COLUMN_SEP);
+//                             offset_x += COLUMN_SEP_WIDTH;
+//                         }
+
+//                         match record.get(column_key) {
+//                             None => {
+//                                 // Print out a highlighted sentinel, to indicate a missing value.
+//                                 printer.with_color(ColorStyle::highlight_inactive(), |pr| {
+//                                     pr.print_hline((offset_x, offset_y), content_width, MISSING_STR);
+//                                 });
+//                             },
+//                             Some(value) => {
+//                                 // Rough approximation for capacity.
+//                                 let mut buffer = String::with_capacity(content_width);
+
+//                                 Util::extend_with_fitted_str(&mut buffer, value, content_width);
+
+//                                 printer.print((offset_x, offset_y), &buffer);
+//                             },
+//                         }
+
+//                         offset_x += content_width;
+//                     }
+//                 }
+//             })
+//             .with_required_size(|shared_model, _constraints| {
+//                 let mut model = shared_model.lock().unwrap();
+//                 model.recache();
+
+//                 let (x, y) = model.required_size(COLUMN_SEP_WIDTH);
+//                 // (x, y.saturating_sub(1)).into()
+//                 (x, y + 1).into()
+//             })
+//         ;
+
+//         let scroll_view = ScrollView::new(canvas).scroll_x(true).scroll_y(true);
+
+//         Self {
+//             shared_model,
+//             scroll_view,
+//         }
+//     }
+// }
+
+// impl View for TagRecordView {
+//     fn draw(&self, printer: &Printer<'_, '_>) {
+//         let content_viewport = self.scroll_view.content_viewport();
+
+//         // This sub block is needed to avoid a deadlock.
+//         {
+//             let model = self.shared_model.lock().unwrap();
+
+//             let (header, header_bar) = model.headers();
+
+//             // Draw the header and the header bar at the top vertical positions,
+//             // but all the way to the left, so they scroll with the content.
+//             let left_offset_printer = printer.content_offset((content_viewport.left(), 0));
+
+//             left_offset_printer.print((0, 0), header);
+//             left_offset_printer.print((0, 1), header_bar);
+//         }
+
+//         // Draw the `ScrollView` starting two columns down.
+//         self.scroll_view.draw(&printer.offset((0, 2)));
+//     }
+
+//     fn layout(&mut self, size: XY<usize>) {
+//         {
+//             let mut model = self.shared_model.lock().unwrap();
+//             model.recache();
+//         }
+
+//         self.scroll_view.layout(size);
+//     }
+
+//     fn required_size(&mut self, constraint: XY<usize>) -> XY<usize> {
+//         self.scroll_view.required_size(constraint) + (0, 2)
+//     }
+
+//     fn on_event(&mut self, event: Event) -> EventResult {
+//         // Forward the event to the inner `ScrollView`.
+//         self.scroll_view.on_event(event)
+//     }
+
+//     fn take_focus(&mut self, source: Direction) -> bool {
+//         self.scroll_view.take_focus(source)
+//     }
+// }
 
 pub struct TagRecordView {
     shared_model: Arc<Mutex<Model>>,
@@ -396,8 +508,9 @@ fn main() {
 
     let records =
         (0..=num_records)
-        .map(|_| {
+        .map(|i| {
             hashmap! {
+                str!("index") => str!(i),
                 str!("name") => names.choose(&mut rng).unwrap().to_string(),
                 str!("age") => str!((18..=70).choose(&mut rng).unwrap()),
                 str!("fave_food") => fave_foods.choose(&mut rng).unwrap().to_string(),
@@ -409,17 +522,21 @@ fn main() {
     ;
 
     let columns = indexmap! {
+        str!("index") => ColumnDef {
+            title: str!("Index"),
+            sizing: Sizing::Auto,
+        },
         str!("name") => ColumnDef {
             title: str!("日本人の氏名"),
             sizing: Sizing::Fixed(6),
         },
         str!("age") => ColumnDef {
             title: str!("Age"),
-            sizing: Sizing::Fixed(80),
+            sizing: Sizing::Fixed(120),
         },
         str!("fave_food") => ColumnDef {
             title: str!("Favorite Food"),
-            sizing: Sizing::Fixed(80),
+            sizing: Sizing::Fixed(120),
         },
         str!("score") => ColumnDef {
             title: str!("Score"),
@@ -438,7 +555,7 @@ fn main() {
 
     let mut siv = Cursive::default();
 
-    siv.add_layer(
+    siv.add_fullscreen_layer(
         main_view
         // .scrollable()
         // .scroll_x(true)

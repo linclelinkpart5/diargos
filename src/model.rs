@@ -149,6 +149,10 @@ impl Model {
     pub fn iter_cache<'a>(&'a self) -> IterCache<'a> {
         IterCache(self.cached_content_widths.iter())
     }
+
+    pub fn required_size(&self, column_sep_width: usize) -> (usize, usize) {
+        (self.total_display_width(column_sep_width), self.records.len())
+    }
 }
 
 impl Default for Model {
