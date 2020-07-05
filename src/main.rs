@@ -18,7 +18,9 @@ use cursive::direction::Direction;
 use cursive::event::Event;
 use cursive::event::EventResult;
 use cursive::theme::ColorStyle;
+use cursive::traits::Resizable;
 use cursive::view::View;
+use cursive::view::scroll::Scroller;
 use cursive::views::Canvas;
 use cursive::views::ScrollView;
 
@@ -82,7 +84,11 @@ impl TagRecordView {
             })
         ;
 
-        let scroll_view = ScrollView::new(canvas).scroll_x(true).scroll_y(true);
+        let mut scroll_view = ScrollView::new(canvas).scroll_x(true).scroll_y(true);
+
+        // Set the scrollbar padding to be 0 on both axes.
+        let scroller = scroll_view.get_scroller_mut();
+        scroller.set_scrollbar_padding((0, 0));
 
         Self {
             shared_model,
@@ -250,10 +256,7 @@ fn main() {
 
     siv.add_fullscreen_layer(
         main_view
-        // .scrollable()
-        // .scroll_x(true)
-        // .scroll_y(false)
-        // .fixed_size((30, 20))
+        .fixed_size((30, 20))
     );
 
     siv.run();
