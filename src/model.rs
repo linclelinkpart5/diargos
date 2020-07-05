@@ -113,11 +113,6 @@ impl Model {
                 self.header_bar.push_str(COLUMN_HEADER_BAR);
             }
         }
-
-        // println!("{}", self.header);
-        // println!("{}", self.header_bar);
-
-        // assert_eq!(self.header.width_cjk(), self.header_bar.width_cjk());
     }
 
     pub fn mutate_columns<F, R>(&mut self, func: F) -> R
