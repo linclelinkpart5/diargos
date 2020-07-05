@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 use std::slice::Iter as SliceIter;
 
+use cursive::XY;
 use indexmap::IndexMap;
 
 use crate::consts::*;
@@ -150,8 +151,8 @@ impl Model {
         IterCache(self.cached_content_widths.iter())
     }
 
-    pub fn required_size(&self, column_sep_width: usize) -> (usize, usize) {
-        (self.total_display_width(column_sep_width), self.records.len())
+    pub fn required_size(&self, column_sep_width: usize) -> XY<usize> {
+        XY::new(self.total_display_width(column_sep_width), self.records.len())
     }
 }
 
