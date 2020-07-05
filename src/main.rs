@@ -22,6 +22,7 @@ use cursive::traits::Resizable;
 use cursive::view::View;
 use cursive::view::scroll::Scroller;
 use cursive::views::Canvas;
+use cursive::views::Dialog;
 use cursive::views::ScrollView;
 
 use crate::consts::*;
@@ -201,7 +202,7 @@ fn main() {
     // Produced: V-scrollbar present.
     // let num_records = 65;
 
-    let num_records = 100;
+    let num_records = 62;
 
     let mut rng = rand::thread_rng();
 
@@ -255,8 +256,10 @@ fn main() {
     let mut siv = Cursive::default();
 
     siv.add_fullscreen_layer(
-        main_view
-        .fixed_size((30, 20))
+        Dialog::around(
+            main_view
+            // .fixed_size((60, 80))
+        )
     );
 
     siv.run();
