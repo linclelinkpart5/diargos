@@ -129,8 +129,9 @@ impl View for TagRecordView {
     }
 
     fn required_size(&mut self, constraint: XY<usize>) -> XY<usize> {
-        let inner_constraint = constraint.saturating_sub((0, 2));
-        self.scroll_view.required_size(inner_constraint) + (0, 2)
+        let header_required_extra = XY::new(0, 2);
+        let inner_constraint = constraint.saturating_sub(header_required_extra);
+        self.scroll_view.required_size(inner_constraint) + header_required_extra
     }
 
     fn on_event(&mut self, event: Event) -> EventResult {
@@ -514,17 +515,19 @@ fn main() {
     // PASS
     // Expected: V-scrollbar absent.
     // Produced: V-scrollbar absent.
-    // let num_records = 61;
+    // let num_records = 63;
 
     // FAIL
     // Expected: V-scrollbar present.
     // Produced: V-scrollbar absent.
-    // let num_records = 62;
+    // let num_records = 64;
 
     // PASS
     // Expected: V-scrollbar present.
     // Produced: V-scrollbar present.
-    let num_records = 63;
+    // let num_records = 65;
+
+    let num_records = 100;
 
     let mut rng = rand::thread_rng();
 
@@ -577,7 +580,7 @@ fn main() {
 
     let mut siv = Cursive::default();
 
-    siv.add_layer(
+    siv.add_fullscreen_layer(
         main_view
         // .scrollable()
         // .scroll_x(true)
