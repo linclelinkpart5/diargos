@@ -27,6 +27,7 @@ use cursive::views::ScrollView;
 
 use crate::consts::*;
 use crate::model::ColumnDef;
+use crate::model::Data;
 use crate::model::Model;
 use crate::model::Sizing;
 use crate::util::Util;
@@ -37,7 +38,9 @@ pub struct TagRecordView {
 }
 
 impl TagRecordView {
-    pub fn new(model: Model) -> Self {
+    pub fn new(data: Data) -> Self {
+        let model = Model::with_data(data);
+
         let shared_model = Arc::new(Mutex::new(model));
 
         let canvas =
@@ -45,11 +48,11 @@ impl TagRecordView {
             .with_draw(|shared_model, printer| {
                 let model = shared_model.lock().unwrap();
 
-                for (offset_y, record) in model.records.iter().enumerate() {
+                for (offset_y, record) in model.get_data().records.iter().enumerate() {
                     let mut offset_x = 0;
                     let mut is_first_col = true;
 
-                    for (column_key, content_width) in model.columns.keys().zip(model.iter_cache()) {
+                    for (column_key, content_width) in model.get_data().columns.keys().zip(model.iter_cached_widths()) {
                         if is_first_col { is_first_col = false; }
                         else {
                             printer.print((offset_x, offset_y), COLUMN_SEP);
@@ -202,7 +205,7 @@ fn main() {
     // Produced: V-scrollbar present.
     // let num_records = 65;
 
-    let num_records = 62;
+    let num_records = 63;
 
     let mut rng = rand::thread_rng();
 
@@ -248,7 +251,7 @@ fn main() {
         },
     };
 
-    let model = Model::with_data(columns, records);
+    let model = Data::with_data(columns, records);
 
     // let main_view = TagEditorView::new(model);
     let main_view = TagRecordView::new(model);

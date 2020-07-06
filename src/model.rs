@@ -30,27 +30,50 @@ pub type Record = HashMap<String, String>;
 pub type Columns = IndexMap<String, ColumnDef>;
 pub type Records = Vec<Record>;
 
-pub struct Model {
+pub struct Data {
     pub columns: Columns,
     pub records: Records,
+}
 
-    cached_content_widths: Vec<usize>,
+impl Data {
+    pub fn new() -> Self {
+        Self::with_data(Columns::new(), Records::new())
+    }
+
+    pub fn with_data(columns: Columns, records: Records) -> Self {
+        Self {
+            columns,
+            records,
+        }
+    }
+
+    pub fn iter_column<'a>(&'a self, column_key: &'a str) -> IterColumn<'a> {
+        IterColumn(column_key, self.records.iter())
+    }
+}
+
+impl Default for Data {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct Model {
+    data: Data,
+
+    pub cached_content_widths: Vec<usize>,
     dirty: bool,
     header: String,
     header_bar: String,
 }
 
 impl Model {
-    pub fn new() -> Self {
-        Self::with_data(Columns::new(), Records::new())
-    }
-
-    pub fn with_data(columns: Columns, records: Records) -> Self {
-        let cached_content_widths = Vec::with_capacity(columns.len());
+    pub fn with_data(data: Data) -> Self {
+        let cached_content_widths = Vec::with_capacity(data.columns.len());
 
         let mut new = Self {
-            columns,
-            records,
+            data,
+
             cached_content_widths,
             dirty: true,
             header: String::new(),
@@ -62,12 +85,8 @@ impl Model {
         new
     }
 
-    pub fn headers(&self) -> (&str, &str) {
-        (&self.header, &self.header_bar)
-    }
-
-    pub fn needs_recache(&self) -> bool {
-        self.dirty
+    pub fn get_data(&self) -> &Data {
+        &self.data
     }
 
     pub fn recache(&mut self) {
@@ -77,20 +96,24 @@ impl Model {
         else { return; }
 
         self.cached_content_widths.clear();
-        self.cached_content_widths.reserve(self.columns.len());
+        self.cached_content_widths.reserve(self.data.columns.len());
 
-        for (column_key, column_def) in self.columns.iter() {
+        for (column_key, column_def) in self.data.columns.iter() {
             let column_sizing = column_def.sizing;
 
             let content_width = match column_sizing {
                 Sizing::Fixed(width) => width,
-                Sizing::Auto => Util::max_column_content_width(column_key, &self.columns, &self.records),
+                Sizing::Auto => Util::max_column_content_width(
+                    column_key,
+                    &self.data.columns,
+                    &self.data.records,
+                ),
             };
 
             self.cached_content_widths.push(content_width);
         }
 
-        assert_eq!(self.cached_content_widths.len(), self.columns.len());
+        assert_eq!(self.cached_content_widths.len(), self.data.columns.len());
 
         // Create the cached header and header bar.
         let mut is_first_col = true;
@@ -99,7 +122,7 @@ impl Model {
 
         let content_widths = self.cached_content_widths.iter().cloned();
 
-        for (column_def, content_width) in self.columns.values().zip(content_widths) {
+        for (column_def, content_width) in self.data.columns.values().zip(content_widths) {
             if is_first_col { is_first_col = false; }
             else {
                 self.header.push_str(COLUMN_SEP);
@@ -115,11 +138,28 @@ impl Model {
         }
     }
 
+    pub fn headers(&self) -> (&str, &str) {
+        (&self.header, &self.header_bar)
+    }
+
+    pub fn needs_recache(&self) -> bool {
+        self.dirty
+    }
+
+    pub fn total_display_width(&self, column_sep_width: usize) -> usize {
+        let total_sep_width = self.cached_content_widths.len().saturating_sub(1) * column_sep_width;
+        self.cached_content_widths.iter().sum::<usize>() + total_sep_width
+    }
+
+    pub fn required_size(&self, column_sep_width: usize) -> XY<usize> {
+        XY::new(self.total_display_width(column_sep_width), self.data.records.len())
+    }
+
     pub fn mutate_columns<F, R>(&mut self, func: F) -> R
     where
         F: FnOnce(&mut Columns) -> R,
     {
-        let result = func(&mut self.columns);
+        let result = func(&mut self.data.columns);
         self.dirty = true;
         result
     }
@@ -128,32 +168,13 @@ impl Model {
     where
         F: FnOnce(&mut Records) -> R,
     {
-        let result = func(&mut self.records);
+        let result = func(&mut self.data.records);
         self.dirty = true;
         result
     }
 
-    pub fn total_display_width(&self, column_sep_width: usize) -> usize {
-        let total_sep_width = self.cached_content_widths.len().saturating_sub(1) * column_sep_width;
-        self.cached_content_widths.iter().sum::<usize>() + total_sep_width
-    }
-
-    pub fn iter_column<'a>(&'a self, column_key: &'a str) -> IterColumn<'a> {
-        IterColumn(column_key, self.records.iter())
-    }
-
-    pub fn iter_cache<'a>(&'a self) -> IterCache<'a> {
+    pub fn iter_cached_widths<'a>(&'a self) -> IterCache<'a> {
         IterCache(self.cached_content_widths.iter())
-    }
-
-    pub fn required_size(&self, column_sep_width: usize) -> XY<usize> {
-        XY::new(self.total_display_width(column_sep_width), self.records.len())
-    }
-}
-
-impl Default for Model {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
