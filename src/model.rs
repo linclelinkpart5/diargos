@@ -1,4 +1,5 @@
 
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::slice::Iter as SliceIter;
 
@@ -50,6 +51,17 @@ impl Data {
     pub fn iter_column<'a>(&'a self, column_key: &'a str) -> IterColumn<'a> {
         IterColumn(column_key, self.records.iter())
     }
+
+    pub fn sort_by_column(&mut self, column_key: &str) {
+        self.records.sort_by(|ra, rb| {
+            match (ra.get(column_key), rb.get(column_key)) {
+                (None, None) => Ordering::Equal,
+                (None, Some(..)) => Ordering::Less,
+                (Some(..), None) => Ordering::Greater,
+                (Some(a), Some(b)) => a.cmp(b),
+            }
+        });
+    }
 }
 
 impl Default for Data {
@@ -61,7 +73,7 @@ impl Default for Data {
 pub struct Model {
     data: Data,
 
-    pub cached_content_widths: Vec<usize>,
+    cached_content_widths: Vec<usize>,
     dirty: bool,
     header: String,
     header_bar: String,
@@ -142,10 +154,6 @@ impl Model {
         (&self.header, &self.header_bar)
     }
 
-    pub fn needs_recache(&self) -> bool {
-        self.dirty
-    }
-
     pub fn total_display_width(&self, column_sep_width: usize) -> usize {
         let total_sep_width = self.cached_content_widths.len().saturating_sub(1) * column_sep_width;
         self.cached_content_widths.iter().sum::<usize>() + total_sep_width
@@ -175,6 +183,11 @@ impl Model {
 
     pub fn iter_cached_widths<'a>(&'a self) -> IterCache<'a> {
         IterCache(self.cached_content_widths.iter())
+    }
+
+    pub fn sort_by_column(&mut self, column_key: &str) {
+        // No recaching should be needed with sorting.
+        self.data.sort_by_column(column_key);
     }
 }
 
