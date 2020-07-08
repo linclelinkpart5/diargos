@@ -39,11 +39,29 @@ pub struct TagRecordView {
 
 impl TagRecordView {
     pub fn new(model: Model) -> Self {
+        // use std::fs::OpenOptions;
+        // use std::io::prelude::*;
+
         let shared_model = Arc::new(Mutex::new(model));
+
+        // first_visible_record = printer.content_offset.y
+        // num_visible_records = printer.output_size.y
 
         let canvas =
             Canvas::new(shared_model.clone())
             .with_draw(|shared_model, printer| {
+                // let mut file =
+                //     OpenOptions::new()
+                //     .create(true)
+                //     .write(true)
+                //     .append(true)
+                //     .open("logs.txt")
+                //     .unwrap()
+                // ;
+
+                // let log = format!("{:?}, {:?}\n", printer.output_size, printer.content_offset);
+                // file.write_all(log.as_bytes()).unwrap();
+
                 let model = shared_model.lock().unwrap();
 
                 for (offset_y, record) in model.get_data().records.iter().enumerate() {
@@ -207,7 +225,7 @@ fn main() {
     // Produced: V-scrollbar present.
     // let num_records = 65;
 
-    let num_records = 63;
+    let num_records = 100;
 
     let mut rng = rand::thread_rng();
 

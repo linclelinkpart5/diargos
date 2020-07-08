@@ -333,3 +333,160 @@ impl<'a> Iterator for IterCache<'a> {
         self.0.next().copied()
     }
 }
+
+pub struct IterWidthsOffsets<'a> {
+    width_iter: SliceIter<'a, usize>,
+    curr_offset: usize,
+    column_sep_width: usize,
+    is_first: bool,
+}
+
+impl<'a> IterWidthsOffsets<'a> {
+    pub fn new(widths: &'a [usize], column_sep_width: usize) -> Self {
+        Self {
+            width_iter: widths.iter(),
+            curr_offset: 0,
+            column_sep_width,
+            is_first: true,
+        }
+    }
+}
+
+impl<'a> Iterator for IterWidthsOffsets<'a> {
+    type Item = (usize, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let width = self.width_iter.next().copied()?;
+
+        if self.is_first { self.is_first = false; }
+        else { self.curr_offset += self.column_sep_width; }
+
+        let ret = (width, self.curr_offset);
+
+        self.curr_offset += width;
+
+        Some(ret)
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PrintAtomsState {
+    Value,
+    Ellipsis,
+    Delimiter,
+}
+
+pub struct PrintAtoms<'a, S, W>
+where
+    S: Iterator<Item = &'a str>,
+    W: Iterator<Item = usize>,
+{
+    atoms: std::iter::Peekable<std::iter::Zip<S, W>>,
+    curr_offset: usize,
+    is_first: bool,
+    state: PrintAtomsState,
+}
+
+impl<'a, S, W> PrintAtoms<'a, S, W>
+where
+    S: Iterator<Item = &'a str>,
+    W: Iterator<Item = usize>,
+{
+    pub fn new(strings: S, widths: W) -> Self {
+        Self {
+            atoms: strings.zip(widths).peekable(),
+            curr_offset: 0,
+            is_first: true,
+            state: PrintAtomsState::Value,
+        }
+    }
+}
+
+impl<'a, S, W> Iterator for PrintAtoms<'a, S, W>
+where
+    S: Iterator<Item = &'a str>,
+    W: Iterator<Item = usize>,
+{
+    type Item = (&'a str, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.atoms.peek()?;
+
+        match self.state {
+            PrintAtomsState::Value => {
+                let (original_str, target_width) = self.atoms.next()?;
+
+                let (trimmed_str, _, was_trimmed) =
+                    Util::trim_display_str(original_str, target_width)
+                ;
+
+                let ret = Some((trimmed_str, self.curr_offset));
+
+                self.curr_offset += target_width;
+
+                if was_trimmed {
+                    self.state = PrintAtomsState::Ellipsis;
+                } else {
+                    self.state = PrintAtomsState::Delimiter;
+                }
+
+                ret
+            },
+            PrintAtomsState::Ellipsis => {
+                let ret = Some((ELLIPSIS_STR, self.curr_offset));
+
+                self.state = PrintAtomsState::Delimiter;
+                self.curr_offset += ELLIPSIS_STR_WIDTH;
+
+                ret
+            },
+            PrintAtomsState::Delimiter => {
+                let ret = Some((COLUMN_SEP, self.curr_offset));
+
+                self.state = PrintAtomsState::Value;
+                self.curr_offset += COLUMN_SEP_WIDTH;
+
+                ret
+            },
+        }
+    }
+}
+
+impl<'a, S, W> std::iter::FusedIterator for PrintAtoms<'a, S, W>
+where
+    S: Iterator<Item = &'a str>,
+    W: Iterator<Item = usize>,
+{}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn print_atoms() {
+        let strings = &["wow", "tubular", "日本人の氏名", "neat"];
+        let widths = &[5, 5, 5, 5];
+
+        let produced =
+            PrintAtoms::new(
+                strings.iter().copied(),
+                widths.iter().copied(),
+            )
+            .collect::<Vec<_>>()
+        ;
+        let expected = vec![
+            ("wow", 0),
+            (" │ ", 5),
+            ("tubul", 8),
+            ("⋯", 13),
+            (" │ ", 14),
+            ("日本", 17),
+            ("⋯", 22),
+            (" │ ", 23),
+            ("neat", 26),
+        ];
+
+        assert_eq!(produced, expected);
+    }
+}
