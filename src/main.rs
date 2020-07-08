@@ -38,9 +38,7 @@ pub struct TagRecordView {
 }
 
 impl TagRecordView {
-    pub fn new(data: Data) -> Self {
-        let model = Model::with_data(data);
-
+    pub fn new(model: Model) -> Self {
         let shared_model = Arc::new(Mutex::new(model));
 
         let canvas =
@@ -98,6 +96,10 @@ impl TagRecordView {
             shared_model,
             scroll_view,
         }
+    }
+
+    pub fn from_data(data: Data) -> Self {
+        Self::new(Model::with_data(data))
     }
 }
 
@@ -251,9 +253,10 @@ fn main() {
         },
     };
 
-    let model = Data::with_data(columns, records);
+    let data = Data::with_data(columns, records);
 
-    // let main_view = TagEditorView::new(model);
+    let model = Model::with_data(data);
+
     let main_view = TagRecordView::new(model);
 
     let mut siv = Cursive::default();
