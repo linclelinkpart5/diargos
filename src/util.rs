@@ -1,4 +1,6 @@
 
+use std::iter::Peekable;
+
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
@@ -7,47 +9,83 @@ use crate::model::Columns;
 use crate::model::Records;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TrimOutcome<'a> {
-    Untrimmed(&'a str, usize),
-    Trimmed(&'a str, usize, bool, usize),
+pub enum TrimStatus {
+    Untrimmed,
+    Trimmed(usize, bool),
 }
 
-impl<'a> TrimOutcome<'a> {
-    pub fn value(&self) -> &str {
-        match self {
-            Self::Untrimmed(v, _) => v,
-            Self::Trimmed(v, _, _, _) => v,
-        }
-    }
-
+impl TrimStatus {
     pub fn was_trimmed(&self) -> bool {
         match self {
-            Self::Untrimmed(..) => false,
+            Self::Untrimmed => false,
             Self::Trimmed(..) => true,
         }
     }
 
     pub fn padding(&self) -> usize {
         match self {
-            Self::Untrimmed(..) => 0,
-            Self::Trimmed(_, padding, _, _) => *padding,
+            Self::Untrimmed => 0,
+            Self::Trimmed(padding, _) => *padding,
         }
     }
 
     pub fn emit_ellipsis(&self) -> bool {
         match self {
-            Self::Untrimmed(..) => false,
-            Self::Trimmed(_, _, emit_ellipsis, _) => *emit_ellipsis,
-        }
-    }
-
-    pub fn string_width(&self) -> usize {
-        match self {
-            Self::Untrimmed(_, w) => *w,
-            Self::Trimmed(_, _, _, w) => *w,
+            Self::Untrimmed => false,
+            Self::Trimmed(_, emit_ellipsis) => *emit_ellipsis,
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TrimOutput<'a> {
+    pub display_string: &'a str,
+    pub output_width: usize,
+    pub trim_status: TrimStatus,
+}
+
+// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// pub enum TrimOutput<'a> {
+//     Untrimmed(&'a str, usize),
+//     Trimmed(&'a str, usize, bool, usize),
+// }
+
+// impl<'a> TrimOutput<'a> {
+//     pub fn value(&self) -> &str {
+//         match self {
+//             Self::Untrimmed(v, _) => v,
+//             Self::Trimmed(v, _, _, _) => v,
+//         }
+//     }
+
+//     pub fn was_trimmed(&self) -> bool {
+//         match self {
+//             Self::Untrimmed(..) => false,
+//             Self::Trimmed(..) => true,
+//         }
+//     }
+
+//     pub fn padding(&self) -> usize {
+//         match self {
+//             Self::Untrimmed(..) => 0,
+//             Self::Trimmed(_, padding, _, _) => *padding,
+//         }
+//     }
+
+//     pub fn emit_ellipsis(&self) -> bool {
+//         match self {
+//             Self::Untrimmed(..) => false,
+//             Self::Trimmed(_, _, emit_ellipsis, _) => *emit_ellipsis,
+//         }
+//     }
+
+//     pub fn string_width(&self) -> usize {
+//         match self {
+//             Self::Untrimmed(_, w) => *w,
+//             Self::Trimmed(_, _, _, w) => *w,
+//         }
+//     }
+// }
 
 pub struct Util;
 
@@ -76,11 +114,11 @@ impl Util {
         (original_str, 0, false)
     }
 
-    pub fn trim_display_str_elided(
-        original_str: &str,
+    pub fn trim_display_str_elided<'a>(
+        original_str: &'a str,
         target_width: usize,
         ellipsis_width: usize,
-    ) -> TrimOutcome<'_>
+    ) -> TrimOutput<'a>
     {
         let mut curr_width = 0;
 
@@ -130,12 +168,11 @@ impl Util {
                 let output_width = elided_width.saturating_sub(padding);
 
                 // At this point, the elided width should be used.
-                return TrimOutcome::Trimmed(
-                    &original_str[..elided_i],
-                    padding,
-                    print_ellipsis,
+                return TrimOutput {
+                    display_string: &original_str[..elided_i],
                     output_width,
-                );
+                    trim_status: TrimStatus::Trimmed(padding, print_ellipsis),
+                };
             }
         }
 
@@ -143,7 +180,11 @@ impl Util {
         let output_width = curr_width;
 
         // The string does not need trimming, just return unchanged.
-        TrimOutcome::Untrimmed(original_str, output_width)
+        TrimOutput {
+            display_string: original_str,
+            output_width,
+            trim_status: TrimStatus::Untrimmed,
+        }
     }
 
     pub fn max_column_content_width(column_key: &str, columns: &Columns, records: &Records) -> usize {
@@ -187,6 +228,109 @@ impl Util {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy)]
+enum PrintAtomsState {
+    Value,
+    Ellipsis,
+    Delimiter,
+}
+
+pub struct PrintAtoms<'a, S, W>
+where
+    S: Iterator<Item = &'a str>,
+    W: Iterator<Item = usize>,
+{
+    strings: Peekable<S>,
+    widths: Peekable<W>,
+    curr_offset: usize,
+    is_first: bool,
+    state: PrintAtomsState,
+}
+
+impl<'a, S, W> PrintAtoms<'a, S, W>
+where
+    S: Iterator<Item = &'a str>,
+    W: Iterator<Item = usize>,
+{
+    pub fn new(strings: S, widths: W) -> Self {
+        Self {
+            strings: strings.peekable(),
+            widths: widths.peekable(),
+            curr_offset: 0,
+            is_first: true,
+            state: PrintAtomsState::Value,
+        }
+    }
+}
+
+impl<'a, S, W> Iterator for PrintAtoms<'a, S, W>
+where
+    S: Iterator<Item = &'a str>,
+    W: Iterator<Item = usize>,
+{
+    type Item = (&'a str, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // This is to avoid yielding separators/ellipses if there are no more
+        // strings/widths to process.
+        self.strings.peek()?;
+        self.widths.peek()?;
+
+        match self.state {
+            PrintAtomsState::Value => {
+                let original_str = self.strings.next()?;
+                let target_width = self.widths.next()?;
+
+                let trim_output =
+                    Util::trim_display_str_elided(
+                        original_str,
+                        target_width,
+                        ELLIPSIS_STR_WIDTH,
+                    )
+                ;
+
+                let ret = Some((trim_output.display_string, self.curr_offset));
+
+                if trim_output.trim_status.emit_ellipsis() {
+                    self.state = PrintAtomsState::Ellipsis;
+                } else {
+                    self.state = PrintAtomsState::Delimiter;
+                }
+
+                if trim_output.trim_status.was_trimmed() {
+                    self.curr_offset += trim_output.output_width;
+                } else {
+                    self.curr_offset += target_width;
+                }
+
+                ret
+            },
+            PrintAtomsState::Ellipsis => {
+                let ret = Some((ELLIPSIS_STR, self.curr_offset));
+
+                self.state = PrintAtomsState::Delimiter;
+                self.curr_offset += ELLIPSIS_STR_WIDTH;
+
+                ret
+            },
+            PrintAtomsState::Delimiter => {
+                let ret = Some((COLUMN_SEP, self.curr_offset));
+
+                self.state = PrintAtomsState::Value;
+                self.curr_offset += COLUMN_SEP_WIDTH;
+
+                ret
+            },
+        }
+    }
+}
+
+impl<'a, S, W> std::iter::FusedIterator for PrintAtoms<'a, S, W>
+where
+    S: Iterator<Item = &'a str>,
+    W: Iterator<Item = usize>,
+{}
 
 #[cfg(test)]
 mod test {
@@ -240,67 +384,158 @@ mod test {
     fn trim_display_str_elided() {
         assert_eq!(
             Util::trim_display_str_elided("hello!", 0, 1),
-            TrimOutcome::Trimmed("", 0, false, 0),
+            TrimOutput {
+                display_string: "",
+                output_width: 0,
+                trim_status: TrimStatus::Trimmed(0, false),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("hello!", 3, 1),
-            TrimOutcome::Trimmed("he", 0, true, 2),
+            TrimOutput {
+                display_string: "he",
+                output_width: 2,
+                trim_status: TrimStatus::Trimmed(0, true)
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("hello!", 5, 1),
-            TrimOutcome::Trimmed("hell", 0, true, 4),
+            TrimOutput {
+                display_string: "hell",
+                output_width: 4,
+                trim_status: TrimStatus::Trimmed(0, true),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("hello!", 5, 100),
-            TrimOutcome::Trimmed("hello", 0, false, 5),
+            TrimOutput {
+                display_string: "hello",
+                output_width: 5,
+                trim_status: TrimStatus::Trimmed(0, false),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("hello!", 6, 100),
-            TrimOutcome::Untrimmed("hello!", 6),
+            TrimOutput {
+                display_string: "hello!",
+                output_width: 6,
+                trim_status: TrimStatus::Untrimmed,
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("oh y̆es", 0, 1),
-            TrimOutcome::Trimmed("", 0, false, 0),
+            TrimOutput {
+                display_string: "",
+                output_width: 0,
+                trim_status: TrimStatus::Trimmed(0, false),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("oh y̆es", 4, 1),
-            TrimOutcome::Trimmed("oh ", 0, true, 3),
+            TrimOutput {
+                display_string: "oh ",
+                output_width: 3,
+                trim_status: TrimStatus::Trimmed(0, true),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("oh y̆es", 5, 1),
-            TrimOutcome::Trimmed("oh y̆", 0, true, 4),
+            TrimOutput {
+                display_string: "oh y̆",
+                output_width: 4,
+                trim_status: TrimStatus::Trimmed(0, true),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("oh y̆es", 5, 100),
-            TrimOutcome::Trimmed("oh y̆e", 0, false, 5),
+            TrimOutput {
+                display_string: "oh y̆e",
+                output_width: 5,
+                trim_status: TrimStatus::Trimmed(0, false),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("oh y̆es", 6, 100),
-            TrimOutcome::Untrimmed("oh y̆es", 6),
+            TrimOutput {
+                display_string: "oh y̆es",
+                output_width: 6,
+                trim_status: TrimStatus::Untrimmed,
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("日本人の氏名", 0, 1),
-            TrimOutcome::Trimmed("", 0, false, 0),
+            TrimOutput {
+                display_string: "",
+                output_width: 0,
+                trim_status: TrimStatus::Trimmed(0, false),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("日本人の氏名", 1, 1),
-            TrimOutcome::Trimmed("", 0, true, 0),
+            TrimOutput {
+                display_string: "",
+                output_width: 0,
+                trim_status: TrimStatus::Trimmed(0, true),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("日本人の氏名", 2, 1),
-            TrimOutcome::Trimmed("", 1, true, 0),
+            TrimOutput {
+                display_string: "",
+                output_width: 0,
+                trim_status: TrimStatus::Trimmed(1, true),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("日本人の氏名", 3, 1),
-            TrimOutcome::Trimmed("日", 0, true, 2),
+            TrimOutput {
+                display_string: "日",
+                output_width: 2,
+                trim_status: TrimStatus::Trimmed(0, true),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("日本人の氏名", 4, 1),
-            TrimOutcome::Trimmed("日", 1, true, 2),
+            TrimOutput {
+                display_string: "日",
+                output_width: 2,
+                trim_status: TrimStatus::Trimmed(1, true),
+            },
         );
         assert_eq!(
             Util::trim_display_str_elided("日本人の氏名", 4, 2),
-            TrimOutcome::Trimmed("日", 0, true, 2),
+            TrimOutput {
+                display_string: "日",
+                output_width: 2,
+                trim_status: TrimStatus::Trimmed(0, true),
+            },
         );
+    }
+
+    #[test]
+    fn print_atoms() {
+        let strings = &["wow", "tubular", "日本人の氏名", "neat"];
+        let widths = &[5, 5, 5, 5];
+
+        let produced =
+            PrintAtoms::new(
+                strings.iter().copied(),
+                widths.iter().copied(),
+            )
+            .collect::<Vec<_>>()
+        ;
+        let expected = vec![
+            ("wow", 0),
+            (" │ ", 5),
+            ("tubu", 8),
+            ("⋯", 12),
+            (" │ ", 13),
+            ("日本", 16),
+            ("⋯", 20),
+            (" │ ", 21),
+            ("neat", 24),
+        ];
+
+        assert_eq!(produced, expected);
     }
 }
