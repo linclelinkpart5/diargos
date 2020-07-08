@@ -6,6 +6,7 @@ use std::slice::Iter as SliceIter;
 
 use cursive::XY;
 use indexmap::IndexMap;
+use unicode_width::UnicodeWidthStr;
 
 use crate::consts::*;
 use crate::util::Util;
@@ -416,18 +417,46 @@ where
             PrintAtomsState::Value => {
                 let (original_str, target_width) = self.atoms.next()?;
 
-                let (trimmed_str, _, was_trimmed) =
-                    Util::trim_display_str(original_str, target_width)
+                let original_width = original_str.width_cjk();
+
+                let (display_str, needs_ellipsis) =
+                    if original_width > target_width {
+                        if target_width >= ELLIPSIS_STR_WIDTH {
+                            let elided_width = target_width.saturating_sub(ELLIPSIS_STR_WIDTH);
+                        }
+                        // Degenerate case: the ellipsis is too wide to fit in
+                        // the target width. Do not bother with ellipsis in the case.
+                        else {
+
+                        }
+
+
+                        let elided_width = target_width.saturating_sub(ELLIPSIS_STR_WIDTH);
+
+                        let (trimmed_str, _, was_trimmed) =
+                            Util::trim_display_str(original_str, elided_width)
+                        ;
+
+                        let needs_ellipsis = if target_width < ELLIPSIS_STR_WIDTH {
+                            false
+                        } else {
+                            was_trimmed
+                        };
+
+                        (trimmed_str, needs_ellipsis)
+                    } else {
+                        (original_str, false)
+                    }
                 ;
 
-                let ret = Some((trimmed_str, self.curr_offset));
+                let ret = Some((display_str, self.curr_offset));
 
-                self.curr_offset += target_width;
-
-                if was_trimmed {
+                if needs_ellipsis {
                     self.state = PrintAtomsState::Ellipsis;
+                    self.curr_offset += target_width.saturating_sub(ELLIPSIS_STR_WIDTH);
                 } else {
                     self.state = PrintAtomsState::Delimiter;
+                    self.curr_offset += target_width;
                 }
 
                 ret
@@ -478,13 +507,13 @@ mod test {
         let expected = vec![
             ("wow", 0),
             (" │ ", 5),
-            ("tubul", 8),
-            ("⋯", 13),
-            (" │ ", 14),
-            ("日本", 17),
-            ("⋯", 22),
-            (" │ ", 23),
-            ("neat", 26),
+            ("tubu", 8),
+            ("⋯", 12),
+            (" │ ", 13),
+            ("日本", 16),
+            ("⋯", 20),
+            (" │ ", 21),
+            ("neat", 24),
         ];
 
         assert_eq!(produced, expected);
