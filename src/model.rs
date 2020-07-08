@@ -176,6 +176,18 @@ impl Model {
         self.selections.insert(Selection::All);
     }
 
+    pub fn select_cell(&mut self, x: usize, y: usize, append: bool) {
+        // If not appending, clear out the existing selection(s).
+        if !append { self.selections.clear(); }
+        self.selections.insert(Selection::Cell(x, y));
+    }
+
+    pub fn select_column(&mut self, col_idx: usize, append: bool) {
+        // If not appending, clear out the existing selection(s).
+        if !append { self.selections.clear(); }
+        self.selections.insert(Selection::Column(col_idx));
+    }
+
     pub fn select_current_cell(&mut self, append: bool) {
         // If not appending, clear out the existing selection(s).
         if !append { self.selections.clear(); }
