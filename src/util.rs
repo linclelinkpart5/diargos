@@ -229,6 +229,12 @@ impl Util {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrintAtomsOutput<'a> {
+    Text(&'a str),
+    MissingSentinel(usize),
+}
+
 #[derive(Debug, Clone, Copy)]
 enum PrintAtomsState {
     Value,
@@ -238,19 +244,18 @@ enum PrintAtomsState {
 
 pub struct PrintAtoms<'a, S, W>
 where
-    S: Iterator<Item = &'a str>,
+    S: Iterator<Item = Option<&'a str>>,
     W: Iterator<Item = usize>,
 {
     strings: Peekable<S>,
     widths: Peekable<W>,
     curr_offset: usize,
-    is_first: bool,
     state: PrintAtomsState,
 }
 
 impl<'a, S, W> PrintAtoms<'a, S, W>
 where
-    S: Iterator<Item = &'a str>,
+    S: Iterator<Item = Option<&'a str>>,
     W: Iterator<Item = usize>,
 {
     pub fn new(strings: S, widths: W) -> Self {
@@ -258,7 +263,6 @@ where
             strings: strings.peekable(),
             widths: widths.peekable(),
             curr_offset: 0,
-            is_first: true,
             state: PrintAtomsState::Value,
         }
     }
@@ -266,10 +270,10 @@ where
 
 impl<'a, S, W> Iterator for PrintAtoms<'a, S, W>
 where
-    S: Iterator<Item = &'a str>,
+    S: Iterator<Item = Option<&'a str>>,
     W: Iterator<Item = usize>,
 {
-    type Item = (&'a str, usize);
+    type Item = (PrintAtomsOutput<'a>, usize);
 
     fn next(&mut self) -> Option<Self::Item> {
         // This is to avoid yielding separators/ellipses if there are no more
@@ -279,8 +283,19 @@ where
 
         match self.state {
             PrintAtomsState::Value => {
-                let original_str = self.strings.next()?;
+                let opt_original_str = self.strings.next()?;
                 let target_width = self.widths.next()?;
+                let original_str = match opt_original_str {
+                    Some(original_str) => original_str,
+
+                    // A missing value, signal that a sentinel value needs to be
+                    // printed.
+                    None => {
+                        let ret = Some((PrintAtomsOutput::MissingSentinel(target_width), self.curr_offset));
+                        self.curr_offset += target_width;
+                        return ret;
+                    },
+                };
 
                 let trim_output =
                     Util::trim_display_str_elided(
@@ -290,7 +305,7 @@ where
                     )
                 ;
 
-                let ret = Some((trim_output.display_string, self.curr_offset));
+                let ret = Some((PrintAtomsOutput::Text(trim_output.display_string), self.curr_offset));
 
                 if trim_output.trim_status.emit_ellipsis() {
                     self.state = PrintAtomsState::Ellipsis;
@@ -307,7 +322,7 @@ where
                 ret
             },
             PrintAtomsState::Ellipsis => {
-                let ret = Some((ELLIPSIS_STR, self.curr_offset));
+                let ret = Some((PrintAtomsOutput::Text(ELLIPSIS_STR), self.curr_offset));
 
                 self.state = PrintAtomsState::Delimiter;
                 self.curr_offset += ELLIPSIS_STR_WIDTH;
@@ -315,7 +330,7 @@ where
                 ret
             },
             PrintAtomsState::Delimiter => {
-                let ret = Some((COLUMN_SEP, self.curr_offset));
+                let ret = Some((PrintAtomsOutput::Text(COLUMN_SEP), self.curr_offset));
 
                 self.state = PrintAtomsState::Value;
                 self.curr_offset += COLUMN_SEP_WIDTH;
@@ -328,7 +343,7 @@ where
 
 impl<'a, S, W> std::iter::FusedIterator for PrintAtoms<'a, S, W>
 where
-    S: Iterator<Item = &'a str>,
+    S: Iterator<Item = Option<&'a str>>,
     W: Iterator<Item = usize>,
 {}
 
@@ -514,8 +529,8 @@ mod test {
 
     #[test]
     fn print_atoms() {
-        let strings = &["wow", "tubular", "日本人の氏名", "neat"];
-        let widths = &[5, 5, 5, 5];
+        let strings = &[Some("wow"), Some("tubular"), Some("日本人の氏名"), Some("neat"), None];
+        let widths = &[5, 5, 5, 5, 5];
 
         let produced =
             PrintAtoms::new(
@@ -525,15 +540,17 @@ mod test {
             .collect::<Vec<_>>()
         ;
         let expected = vec![
-            ("wow", 0),
-            (" │ ", 5),
-            ("tubu", 8),
-            ("⋯", 12),
-            (" │ ", 13),
-            ("日本", 16),
-            ("⋯", 20),
-            (" │ ", 21),
-            ("neat", 24),
+            (PrintAtomsOutput::Text("wow"), 0),
+            (PrintAtomsOutput::Text(" │ "), 5),
+            (PrintAtomsOutput::Text("tubu"), 8),
+            (PrintAtomsOutput::Text("⋯"), 12),
+            (PrintAtomsOutput::Text(" │ "), 13),
+            (PrintAtomsOutput::Text("日本"), 16),
+            (PrintAtomsOutput::Text("⋯"), 20),
+            (PrintAtomsOutput::Text(" │ "), 21),
+            (PrintAtomsOutput::Text("neat"), 24),
+            (PrintAtomsOutput::Text(" │ "), 29),
+            (PrintAtomsOutput::MissingSentinel(5), 32),
         ];
 
         assert_eq!(produced, expected);

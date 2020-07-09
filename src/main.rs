@@ -18,7 +18,6 @@ use cursive::direction::Direction;
 use cursive::event::Event;
 use cursive::event::EventResult;
 use cursive::theme::ColorStyle;
-use cursive::traits::Resizable;
 use cursive::view::View;
 use cursive::view::scroll::Scroller;
 use cursive::views::Canvas;

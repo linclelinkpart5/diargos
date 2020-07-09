@@ -6,10 +6,10 @@ use std::slice::Iter as SliceIter;
 
 use cursive::XY;
 use indexmap::IndexMap;
-use unicode_width::UnicodeWidthStr;
 
 use crate::consts::*;
 use crate::util::Util;
+use crate::util::PrintAtoms;
 
 #[derive(Debug, Clone, Copy)]
 pub enum CursorDir {
@@ -332,40 +332,5 @@ impl<'a> Iterator for IterCache<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next().copied()
-    }
-}
-
-pub struct IterWidthsOffsets<'a> {
-    width_iter: SliceIter<'a, usize>,
-    curr_offset: usize,
-    column_sep_width: usize,
-    is_first: bool,
-}
-
-impl<'a> IterWidthsOffsets<'a> {
-    pub fn new(widths: &'a [usize], column_sep_width: usize) -> Self {
-        Self {
-            width_iter: widths.iter(),
-            curr_offset: 0,
-            column_sep_width,
-            is_first: true,
-        }
-    }
-}
-
-impl<'a> Iterator for IterWidthsOffsets<'a> {
-    type Item = (usize, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let width = self.width_iter.next().copied()?;
-
-        if self.is_first { self.is_first = false; }
-        else { self.curr_offset += self.column_sep_width; }
-
-        let ret = (width, self.curr_offset);
-
-        self.curr_offset += width;
-
-        Some(ret)
     }
 }
