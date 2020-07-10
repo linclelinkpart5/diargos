@@ -78,9 +78,28 @@ impl TagRecordView {
                         match record.get(column_key) {
                             None => {
                                 // Print out a highlighted sentinel, to indicate a missing value.
-                                printer.with_color(ColorStyle::highlight_inactive(), |pr| {
-                                    pr.print_hline((offset_x, offset_y), content_width, MISSING_STR);
-                                });
+                                if content_width < MISSING_SENTINEL.width() {
+                                    printer.with_color(
+                                        ColorStyle::highlight_inactive(),
+                                        |pr| {
+                                            pr.print_hline(
+                                                (offset_x, offset_y),
+                                                content_width,
+                                                MISSING_FILL,
+                                            );
+                                        },
+                                    );
+                                } else {
+                                    printer.with_color(
+                                        ColorStyle::highlight_inactive(),
+                                        |pr| {
+                                            pr.print(
+                                                (offset_x, offset_y),
+                                                MISSING_SENTINEL,
+                                            );
+                                        },
+                                    );
+                                }
                             },
                             Some(value) => {
                                 // Rough approximation for capacity.
@@ -236,7 +255,7 @@ fn main() {
                 str!("index") => str!(i),
                 str!("name") => names.choose(&mut rng).unwrap().to_string(),
                 str!("age") => str!((18..=70).choose(&mut rng).unwrap()),
-                str!("fave_food") => fave_foods.choose(&mut rng).unwrap().to_string(),
+                // str!("fave_food") => fave_foods.choose(&mut rng).unwrap().to_string(),
                 str!("score") => str!((0..=100).choose(&mut rng).unwrap()),
                 str!("is_outgoing") => str!(rand::random::<bool>()),
             }
