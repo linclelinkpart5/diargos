@@ -23,6 +23,7 @@ use cursive::view::scroll::Scroller;
 use cursive::views::Canvas;
 use cursive::views::Dialog;
 use cursive::views::ScrollView;
+use unicode_width::UnicodeWidthStr;
 
 use crate::consts::*;
 use crate::model::ColumnDef;
@@ -71,7 +72,7 @@ impl TagRecordView {
                         if is_first_col { is_first_col = false; }
                         else {
                             printer.print((offset_x, offset_y), COLUMN_SEP);
-                            offset_x += COLUMN_SEP_WIDTH;
+                            offset_x += COLUMN_SEP.width();
                         }
 
                         match record.get(column_key) {
@@ -99,7 +100,7 @@ impl TagRecordView {
                 let mut model = shared_model.lock().unwrap();
                 model.recache();
 
-                model.required_size(COLUMN_SEP_WIDTH)
+                model.required_size(COLUMN_SEP.width())
             })
         ;
 

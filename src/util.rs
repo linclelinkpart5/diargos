@@ -96,7 +96,7 @@ impl Util {
         for (i, ch) in original_str.char_indices() {
             let last_width = curr_width;
 
-            curr_width += ch.width_cjk().unwrap_or(0);
+            curr_width += ch.width().unwrap_or(0);
 
             // Stop once the current width strictly exceeds the target width.
             if curr_width > target_width {
@@ -149,7 +149,7 @@ impl Util {
         for (i, ch) in original_str.char_indices() {
             let last_width = curr_width;
 
-            curr_width += ch.width_cjk().unwrap_or(0);
+            curr_width += ch.width().unwrap_or(0);
 
             if !past_elision_point && curr_width > elided_width {
                 past_elision_point = true;
@@ -189,12 +189,12 @@ impl Util {
 
     pub fn max_column_content_width(column_key: &str, columns: &Columns, records: &Records) -> usize {
         let mut max_seen = match columns.get(column_key) {
-            Some(column_def) => column_def.title.width_cjk(),
+            Some(column_def) => column_def.title.width(),
             None => { return 0; },
         };
 
         for record in records.iter() {
-            let curr_row_width = record.get(column_key).map(|s| s.width_cjk()).unwrap_or(0);
+            let curr_row_width = record.get(column_key).map(|s| s.width()).unwrap_or(0);
             max_seen = max_seen.max(curr_row_width);
         }
 
@@ -202,11 +202,11 @@ impl Util {
     }
 
     pub fn extend_with_fitted_str(buffer: &mut String, original_str: &str, content_width: usize) {
-        let original_width = original_str.width_cjk();
+        let original_width = original_str.width();
 
         let (display_str, padding, add_ellipsis) =
             if original_width > content_width {
-                let trimmed_width = content_width.saturating_sub(ELLIPSIS_STR_WIDTH);
+                let trimmed_width = content_width.saturating_sub(ELLIPSIS_STR.width());
                 let (trimmed_str, internal_padding, was_trimmed) =
                     Util::trim_display_str(original_str, trimmed_width)
                 ;
@@ -301,7 +301,7 @@ where
                     Util::trim_display_str_elided(
                         original_str,
                         target_width,
-                        ELLIPSIS_STR_WIDTH,
+                        ELLIPSIS_STR.width(),
                     )
                 ;
 
@@ -325,7 +325,7 @@ where
                 let ret = Some((PrintAtomsOutput::Text(ELLIPSIS_STR), self.curr_offset));
 
                 self.state = PrintAtomsState::Delimiter;
-                self.curr_offset += ELLIPSIS_STR_WIDTH;
+                self.curr_offset += ELLIPSIS_STR.width();
 
                 ret
             },
@@ -333,7 +333,7 @@ where
                 let ret = Some((PrintAtomsOutput::Text(COLUMN_SEP), self.curr_offset));
 
                 self.state = PrintAtomsState::Value;
-                self.curr_offset += COLUMN_SEP_WIDTH;
+                self.curr_offset += COLUMN_SEP.width();
 
                 ret
             },

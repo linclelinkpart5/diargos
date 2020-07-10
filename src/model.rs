@@ -9,7 +9,6 @@ use indexmap::IndexMap;
 
 use crate::consts::*;
 use crate::util::Util;
-use crate::util::PrintAtoms;
 
 #[derive(Debug, Clone, Copy)]
 pub enum CursorDir {
@@ -85,7 +84,7 @@ impl Default for Data {
 }
 
 pub struct Model {
-    data: Data,
+    pub data: Data,
 
     cursor_pos: (usize, usize),
     selections: HashSet<Selection>,
