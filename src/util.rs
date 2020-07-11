@@ -90,28 +90,8 @@ pub struct TrimOutput<'a> {
 pub struct Util;
 
 impl Util {
-    pub fn trim_display_str(original_str: &str, target_width: usize) -> (&str, usize, bool) {
-        let mut curr_width = 0;
-
-        for (i, ch) in original_str.char_indices() {
-            let last_width = curr_width;
-
-            curr_width += ch.width().unwrap_or(0);
-
-            // Stop once the current width strictly exceeds the target width.
-            if curr_width > target_width {
-                // If this is non-zero, it means that the target width ends in
-                // the middle of a multiwidth character.
-                // This character will end up getting omitted from the final
-                // trimmed string.
-                let padding = target_width - last_width;
-
-                return (&original_str[..i], padding, true);
-            }
-        }
-
-        // The string does not need trimming, just return unchanged.
-        (original_str, 0, false)
+    pub fn trim_display_str<'a>(original_str: &'a str, target_width: usize) -> TrimOutput<'a> {
+        Self::trim_display_str_elided(original_str, target_width, 0)
     }
 
     pub fn trim_display_str_elided<'a>(
@@ -207,9 +187,12 @@ impl Util {
         let (display_str, padding, add_ellipsis) =
             if original_width > content_width {
                 let trimmed_width = content_width.saturating_sub(ELLIPSIS_STR.width());
-                let (trimmed_str, internal_padding, was_trimmed) =
-                    Util::trim_display_str(original_str, trimmed_width)
-                ;
+
+                let trim_output = Util::trim_display_str(original_str, trimmed_width);
+
+                let trimmed_str = trim_output.display_string;
+                let internal_padding = trim_output.trim_status.padding();
+                let was_trimmed = trim_output.trim_status.was_trimmed();
 
                 (trimmed_str, internal_padding, was_trimmed)
             } else {
