@@ -91,8 +91,6 @@ pub struct Model {
 
     cached_content_widths: Vec<usize>,
     dirty: bool,
-    header: String,
-    header_bar: String,
 }
 
 impl Model {
@@ -107,8 +105,6 @@ impl Model {
 
             cached_content_widths,
             dirty: true,
-            header: String::new(),
-            header_bar: String::new(),
         };
 
         new.recache();
@@ -244,32 +240,6 @@ impl Model {
         }
 
         assert_eq!(self.cached_content_widths.len(), self.data.columns.len());
-
-        // Create the cached header and header bar.
-        let mut is_first_col = true;
-        self.header.clear();
-        self.header_bar.clear();
-
-        let content_widths = self.cached_content_widths.iter().cloned();
-
-        for (column_def, content_width) in self.data.columns.values().zip(content_widths) {
-            if is_first_col { is_first_col = false; }
-            else {
-                self.header.push_str(COLUMN_SEP);
-                self.header_bar.push_str(COLUMN_HEADER_SEP);
-            }
-
-            Util::extend_with_fitted_str(&mut self.header, &column_def.title, content_width);
-
-            // Extend the header bar.
-            for _ in 0..content_width {
-                self.header_bar.push_str(COLUMN_HEADER_BAR);
-            }
-        }
-    }
-
-    pub fn headers(&self) -> (&str, &str) {
-        (&self.header, &self.header_bar)
     }
 
     pub fn total_display_width(&self, column_sep_width: usize) -> usize {
