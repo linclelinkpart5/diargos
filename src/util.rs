@@ -15,13 +15,6 @@ pub enum TrimStatus {
 }
 
 impl TrimStatus {
-    pub fn was_trimmed(&self) -> bool {
-        match self {
-            Self::Untrimmed => false,
-            Self::Trimmed(..) => true,
-        }
-    }
-
     pub fn padding(&self) -> usize {
         match self {
             Self::Untrimmed => 0,
@@ -44,48 +37,11 @@ pub struct TrimOutput<'a> {
     pub trim_status: TrimStatus,
 }
 
-// #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-// pub enum TrimOutput<'a> {
-//     Untrimmed(&'a str, usize),
-//     Trimmed(&'a str, usize, bool, usize),
-// }
-
-// impl<'a> TrimOutput<'a> {
-//     pub fn value(&self) -> &str {
-//         match self {
-//             Self::Untrimmed(v, _) => v,
-//             Self::Trimmed(v, _, _, _) => v,
-//         }
-//     }
-
-//     pub fn was_trimmed(&self) -> bool {
-//         match self {
-//             Self::Untrimmed(..) => false,
-//             Self::Trimmed(..) => true,
-//         }
-//     }
-
-//     pub fn padding(&self) -> usize {
-//         match self {
-//             Self::Untrimmed(..) => 0,
-//             Self::Trimmed(_, padding, _, _) => *padding,
-//         }
-//     }
-
-//     pub fn emit_ellipsis(&self) -> bool {
-//         match self {
-//             Self::Untrimmed(..) => false,
-//             Self::Trimmed(_, _, emit_ellipsis, _) => *emit_ellipsis,
-//         }
-//     }
-
-//     pub fn string_width(&self) -> usize {
-//         match self {
-//             Self::Untrimmed(_, w) => *w,
-//             Self::Trimmed(_, _, _, w) => *w,
-//         }
-//     }
-// }
+impl<'a> TrimOutput<'a> {
+    pub fn ellipsis_offset(&self) -> usize {
+        self.output_width + self.trim_status.padding()
+    }
+}
 
 pub struct Util;
 
@@ -184,7 +140,7 @@ impl Util {
     pub fn extend_with_fitted_str(buffer: &mut String, original_str: &str, content_width: usize) {
         let original_width = original_str.width();
 
-        let (display_str, padding, add_ellipsis) =
+        let (display_str, padding, emit_ellipsis) =
             if original_width > content_width {
                 let trimmed_width = content_width.saturating_sub(ELLIPSIS_STR.width());
 
@@ -192,9 +148,9 @@ impl Util {
 
                 let trimmed_str = trim_output.display_string;
                 let internal_padding = trim_output.trim_status.padding();
-                let was_trimmed = trim_output.trim_status.was_trimmed();
+                let emit_ellipsis = trim_output.trim_status.emit_ellipsis();
 
-                (trimmed_str, internal_padding, was_trimmed)
+                (trimmed_str, internal_padding, emit_ellipsis)
             } else {
                 (original_str, content_width - original_width, false)
             }
@@ -206,129 +162,11 @@ impl Util {
         for _ in 0..padding {
             buffer.push(' ');
         }
-        if add_ellipsis {
+        if emit_ellipsis {
             buffer.push_str(ELLIPSIS_STR);
         }
     }
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PrintAtomsOutput<'a> {
-    Text(&'a str),
-    MissingSentinel(usize),
-}
-
-#[derive(Debug, Clone, Copy)]
-enum PrintAtomsState {
-    Value,
-    Ellipsis,
-    Delimiter,
-}
-
-pub struct PrintAtoms<'a, S, W>
-where
-    S: Iterator<Item = Option<&'a str>>,
-    W: Iterator<Item = usize>,
-{
-    strings: Peekable<S>,
-    widths: Peekable<W>,
-    curr_offset: usize,
-    state: PrintAtomsState,
-}
-
-impl<'a, S, W> PrintAtoms<'a, S, W>
-where
-    S: Iterator<Item = Option<&'a str>>,
-    W: Iterator<Item = usize>,
-{
-    pub fn new(strings: S, widths: W) -> Self {
-        Self {
-            strings: strings.peekable(),
-            widths: widths.peekable(),
-            curr_offset: 0,
-            state: PrintAtomsState::Value,
-        }
-    }
-}
-
-impl<'a, S, W> Iterator for PrintAtoms<'a, S, W>
-where
-    S: Iterator<Item = Option<&'a str>>,
-    W: Iterator<Item = usize>,
-{
-    type Item = (PrintAtomsOutput<'a>, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        // This is to avoid yielding separators/ellipses if there are no more
-        // strings/widths to process.
-        self.strings.peek()?;
-        self.widths.peek()?;
-
-        match self.state {
-            PrintAtomsState::Value => {
-                let opt_original_str = self.strings.next()?;
-                let target_width = self.widths.next()?;
-                let original_str = match opt_original_str {
-                    Some(original_str) => original_str,
-
-                    // A missing value, signal that a sentinel value needs to be
-                    // printed.
-                    None => {
-                        let ret = Some((PrintAtomsOutput::MissingSentinel(target_width), self.curr_offset));
-                        self.curr_offset += target_width;
-                        return ret;
-                    },
-                };
-
-                let trim_output =
-                    Util::trim_display_str_elided(
-                        original_str,
-                        target_width,
-                        ELLIPSIS_STR.width(),
-                    )
-                ;
-
-                let ret = Some((PrintAtomsOutput::Text(trim_output.display_string), self.curr_offset));
-
-                if trim_output.trim_status.emit_ellipsis() {
-                    self.state = PrintAtomsState::Ellipsis;
-                } else {
-                    self.state = PrintAtomsState::Delimiter;
-                }
-
-                if trim_output.trim_status.was_trimmed() {
-                    self.curr_offset += trim_output.output_width;
-                } else {
-                    self.curr_offset += target_width;
-                }
-
-                ret
-            },
-            PrintAtomsState::Ellipsis => {
-                let ret = Some((PrintAtomsOutput::Text(ELLIPSIS_STR), self.curr_offset));
-
-                self.state = PrintAtomsState::Delimiter;
-                self.curr_offset += ELLIPSIS_STR.width();
-
-                ret
-            },
-            PrintAtomsState::Delimiter => {
-                let ret = Some((PrintAtomsOutput::Text(COLUMN_SEP), self.curr_offset));
-
-                self.state = PrintAtomsState::Value;
-                self.curr_offset += COLUMN_SEP.width();
-
-                ret
-            },
-        }
-    }
-}
-
-impl<'a, S, W> std::iter::FusedIterator for PrintAtoms<'a, S, W>
-where
-    S: Iterator<Item = Option<&'a str>>,
-    W: Iterator<Item = usize>,
-{}
 
 #[cfg(test)]
 mod test {
@@ -508,34 +346,5 @@ mod test {
                 trim_status: TrimStatus::Trimmed(0, true),
             },
         );
-    }
-
-    #[test]
-    fn print_atoms() {
-        let strings = &[Some("wow"), Some("tubular"), Some("日本人の氏名"), Some("neat"), None];
-        let widths = &[5, 5, 5, 5, 5];
-
-        let produced =
-            PrintAtoms::new(
-                strings.iter().copied(),
-                widths.iter().copied(),
-            )
-            .collect::<Vec<_>>()
-        ;
-        let expected = vec![
-            (PrintAtomsOutput::Text("wow"), 0),
-            (PrintAtomsOutput::Text(" │ "), 5),
-            (PrintAtomsOutput::Text("tubu"), 8),
-            (PrintAtomsOutput::Text("⋯"), 12),
-            (PrintAtomsOutput::Text(" │ "), 13),
-            (PrintAtomsOutput::Text("日本"), 16),
-            (PrintAtomsOutput::Text("⋯"), 20),
-            (PrintAtomsOutput::Text(" │ "), 21),
-            (PrintAtomsOutput::Text("neat"), 24),
-            (PrintAtomsOutput::Text(" │ "), 29),
-            (PrintAtomsOutput::MissingSentinel(5), 32),
-        ];
-
-        assert_eq!(produced, expected);
     }
 }
