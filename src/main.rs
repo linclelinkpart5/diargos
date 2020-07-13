@@ -69,7 +69,7 @@ impl TagRecordView {
                 // file.write_all(log.as_bytes()).unwrap();
 
                 let model = shared_model.lock().unwrap();
-                let data = model.get_data();
+                let data = &model.data;
 
                 for (offset_y, record) in data.records.iter().enumerate() {
                     let atoms_and_widths =
@@ -173,15 +173,23 @@ impl View for TagRecordView {
         // This sub block is needed to avoid a deadlock.
         {
             let model = self.shared_model.lock().unwrap();
-
-            let (header, header_bar) = model.headers();
+            let data = &model.data;
 
             // Draw the header and the header bar at the top vertical positions,
             // but all the way to the left, so they scroll with the content.
             let left_offset_printer = printer.content_offset((content_viewport.left(), 0));
 
-            left_offset_printer.print((0, 0), header);
-            left_offset_printer.print((0, 1), header_bar);
+            let atoms_and_widths =
+                data.columns.values()
+                .map(|column_def| Atom::Text(&column_def.title))
+                .zip(model.iter_cached_widths())
+            ;
+
+            Self::draw_delimited_row(&left_offset_printer, 0, COLUMN_SEP, atoms_and_widths);
+
+            let atoms_and_widths = model.iter_cached_widths().map(|w| (Atom::Header, w));
+
+            Self::draw_delimited_row(&left_offset_printer, 1, COLUMN_HEADER_SEP, atoms_and_widths);
         }
 
         // Draw the `ScrollView` starting two columns down.

@@ -116,10 +116,6 @@ impl Model {
         new
     }
 
-    pub fn get_data(&self) -> &Data {
-        &self.data
-    }
-
     pub fn column_index(&self) -> Option<usize> {
         let (x, _) = self.cursor_pos;
 
