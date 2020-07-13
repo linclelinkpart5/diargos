@@ -69,67 +69,19 @@ impl TagRecordView {
                 // file.write_all(log.as_bytes()).unwrap();
 
                 let model = shared_model.lock().unwrap();
+                let data = model.get_data();
 
-                for (offset_y, record) in model.get_data().records.iter().enumerate() {
-                    let mut offset_x = 0;
-                    let mut is_first_col = true;
+                for (offset_y, record) in data.records.iter().enumerate() {
+                    let atoms_and_widths =
+                        data.columns.keys()
+                        .map(|k| match record.get(k) {
+                            None => Atom::Missing,
+                            Some(s) => Atom::Text(s),
+                        })
+                        .zip(model.iter_cached_widths())
+                    ;
 
-                    for (column_key, content_width) in model.get_data().columns.keys().zip(model.iter_cached_widths()) {
-                        if is_first_col { is_first_col = false; }
-                        else {
-                            printer.print((offset_x, offset_y), COLUMN_SEP);
-                            offset_x += COLUMN_SEP.width();
-                        }
-
-                        match record.get(column_key) {
-                            None => {
-                                // Print out a highlighted sentinel, to indicate a missing value.
-                                printer.with_color(
-                                    ColorStyle::highlight_inactive(),
-                                    |pr| {
-                                        pr.print_hline(
-                                            (offset_x, offset_y),
-                                            content_width,
-                                            MISSING_FILL,
-                                        );
-                                    },
-                                );
-
-                            },
-                            // Some(original_string) => {
-                            //     // Rough approximation for capacity.
-                            //     let mut buffer = String::with_capacity(content_width);
-
-                            //     Util::extend_with_fitted_str(
-                            //         &mut buffer,
-                            //         original_string,
-                            //         content_width,
-                            //     );
-
-                            //     printer.print((offset_x, offset_y), &buffer);
-                            // },
-                            Some(original_string) => {
-                                let trim_output = Util::trim_display_str_elided(
-                                    original_string,
-                                    content_width,
-                                    ELLIPSIS_STR.width(),
-                                );
-
-                                let display_string = trim_output.display_string;
-                                let emit_ellipsis = trim_output.trim_status.emit_ellipsis();
-
-                                printer.print((offset_x, offset_y), &display_string);
-
-                                if emit_ellipsis {
-                                    let ellipsis_offset = trim_output.ellipsis_offset();
-
-                                    printer.print((offset_x + ellipsis_offset, offset_y), ELLIPSIS_STR);
-                                }
-                            },
-                        }
-
-                        offset_x += content_width;
-                    }
+                    Self::draw_delimited_row(printer, offset_y, COLUMN_SEP, atoms_and_widths);
                 }
             })
             .with_required_size(|shared_model, _constraints| {
