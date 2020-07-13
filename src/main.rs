@@ -75,9 +75,6 @@ impl TagRecordView {
                             offset_x += COLUMN_SEP.width();
                         }
 
-                        // Rough approximation for capacity.
-                        let mut buffer = String::with_capacity(content_width);
-
                         match record.get(column_key) {
                             None => {
                                 // Print out a highlighted sentinel, to indicate a missing value.
@@ -93,10 +90,35 @@ impl TagRecordView {
                                 );
 
                             },
-                            Some(value) => {
-                                Util::extend_with_fitted_str(&mut buffer, value, content_width);
+                            // Some(original_string) => {
+                            //     // Rough approximation for capacity.
+                            //     let mut buffer = String::with_capacity(content_width);
 
-                                printer.print((offset_x, offset_y), &buffer);
+                            //     Util::extend_with_fitted_str(
+                            //         &mut buffer,
+                            //         original_string,
+                            //         content_width,
+                            //     );
+
+                            //     printer.print((offset_x, offset_y), &buffer);
+                            // },
+                            Some(original_string) => {
+                                let trim_output = Util::trim_display_str_elided(
+                                    original_string,
+                                    content_width,
+                                    ELLIPSIS_STR.width(),
+                                );
+
+                                let display_string = trim_output.display_string;
+                                let emit_ellipsis = trim_output.trim_status.emit_ellipsis();
+
+                                printer.print((offset_x, offset_y), &display_string);
+
+                                if emit_ellipsis {
+                                    let ellipsis_offset = trim_output.ellipsis_offset();
+
+                                    printer.print((offset_x + ellipsis_offset, offset_y), ELLIPSIS_STR);
+                                }
                             },
                         }
 
@@ -117,8 +139,6 @@ impl TagRecordView {
         // Set the scrollbar padding to be 0 on both axes.
         let scroller = scroll_view.get_scroller_mut();
         scroller.set_scrollbar_padding((0, 0));
-
-        let missing_fill_buffer = String::new();
 
         Self {
             shared_model,
