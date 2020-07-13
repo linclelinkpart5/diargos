@@ -75,36 +75,25 @@ impl TagRecordView {
                             offset_x += COLUMN_SEP.width();
                         }
 
+                        // Rough approximation for capacity.
+                        let mut buffer = String::with_capacity(content_width);
+
                         match record.get(column_key) {
                             None => {
                                 // Print out a highlighted sentinel, to indicate a missing value.
-                                if content_width < MISSING_SENTINEL.width() {
-                                    printer.with_color(
-                                        ColorStyle::highlight_inactive(),
-                                        |pr| {
-                                            pr.print_hline(
-                                                (offset_x, offset_y),
-                                                content_width,
-                                                MISSING_FILL,
-                                            );
-                                        },
-                                    );
-                                } else {
-                                    printer.with_color(
-                                        ColorStyle::highlight_inactive(),
-                                        |pr| {
-                                            pr.print(
-                                                (offset_x, offset_y),
-                                                MISSING_SENTINEL,
-                                            );
-                                        },
-                                    );
-                                }
+                                printer.with_color(
+                                    ColorStyle::highlight_inactive(),
+                                    |pr| {
+                                        pr.print_hline(
+                                            (offset_x, offset_y),
+                                            content_width,
+                                            MISSING_FILL,
+                                        );
+                                    },
+                                );
+
                             },
                             Some(value) => {
-                                // Rough approximation for capacity.
-                                let mut buffer = String::with_capacity(content_width);
-
                                 Util::extend_with_fitted_str(&mut buffer, value, content_width);
 
                                 printer.print((offset_x, offset_y), &buffer);
@@ -128,6 +117,8 @@ impl TagRecordView {
         // Set the scrollbar padding to be 0 on both axes.
         let scroller = scroll_view.get_scroller_mut();
         scroller.set_scrollbar_padding((0, 0));
+
+        let missing_fill_buffer = String::new();
 
         Self {
             shared_model,
