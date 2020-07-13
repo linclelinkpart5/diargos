@@ -7,7 +7,6 @@ use std::slice::Iter as SliceIter;
 use cursive::XY;
 use indexmap::IndexMap;
 
-use crate::consts::*;
 use crate::util::Util;
 
 #[derive(Debug, Clone, Copy)]

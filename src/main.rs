@@ -263,21 +263,6 @@ fn main() {
         "日本人の氏名",
     ];
 
-    // PASS
-    // Expected: V-scrollbar absent.
-    // Produced: V-scrollbar absent.
-    // let num_records = 63;
-
-    // FAIL
-    // Expected: V-scrollbar present.
-    // Produced: V-scrollbar absent.
-    // let num_records = 64;
-
-    // PASS
-    // Expected: V-scrollbar present.
-    // Produced: V-scrollbar present.
-    // let num_records = 65;
-
     let num_records = 100;
 
     let mut rng = rand::thread_rng();
@@ -285,14 +270,19 @@ fn main() {
     let records =
         (1..=num_records)
         .map(|i| {
-            hashmap! {
+            let mut m = hashmap! {
                 str!("index") => str!(i),
                 str!("name") => names.choose(&mut rng).unwrap().to_string(),
                 str!("age") => str!((18..=70).choose(&mut rng).unwrap()),
-                // str!("fave_food") => fave_foods.choose(&mut rng).unwrap().to_string(),
                 str!("score") => str!((0..=100).choose(&mut rng).unwrap()),
                 str!("is_outgoing") => str!(rand::random::<bool>()),
+            };
+
+            if i >= num_records / 2 {
+                m.insert(str!("fave_food"), fave_foods.choose(&mut rng).unwrap().to_string());
             }
+
+            m
         })
         .collect::<Vec<_>>()
     ;

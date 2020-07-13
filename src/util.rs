@@ -1,10 +1,7 @@
 
-use std::iter::Peekable;
-
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
-use crate::consts::*;
 use crate::model::Columns;
 use crate::model::Records;
 
@@ -15,13 +12,6 @@ pub enum TrimStatus {
 }
 
 impl TrimStatus {
-    pub fn was_trimmed(&self) -> bool {
-        match self {
-            Self::Untrimmed => false,
-            Self::Trimmed(..) => true,
-        }
-    }
-
     pub fn padding(&self) -> usize {
         match self {
             Self::Untrimmed => 0,
@@ -53,10 +43,6 @@ impl<'a> TrimOutput<'a> {
 pub struct Util;
 
 impl Util {
-    pub fn trim_display_str<'a>(original_str: &'a str, target_width: usize) -> TrimOutput<'a> {
-        Self::trim_display_str_elided(original_str, target_width, 0)
-    }
-
     pub fn trim_display_str_elided<'a>(
         original_str: &'a str,
         target_width: usize,
@@ -143,86 +129,11 @@ impl Util {
 
         max_seen
     }
-
-    pub fn extend_with_fitted_str(buffer: &mut String, original_str: &str, content_width: usize) {
-        let trim_output = Util::trim_display_str_elided(original_str, content_width, ELLIPSIS_STR.width());
-
-        let mut total_printed_width = 0;
-
-        let trimmed_str = trim_output.display_string;
-        let internal_padding = trim_output.trim_status.padding();
-        let emit_ellipsis = trim_output.trim_status.emit_ellipsis();
-
-        buffer.push_str(trimmed_str);
-        total_printed_width += trim_output.output_width;
-
-        // Add padding and ellipsis, if needed.
-        for _ in 0..internal_padding {
-            buffer.push(' ');
-        }
-        total_printed_width += internal_padding;
-
-        if emit_ellipsis {
-            buffer.push_str(ELLIPSIS_STR);
-            total_printed_width += ELLIPSIS_STR.width();
-        }
-
-        // Add padding to fill rest of content width.
-        let external_padding = content_width.saturating_sub(total_printed_width);
-
-        for _ in 0..external_padding {
-            buffer.push(' ');
-        }
-    }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn trim_display_str() {
-        assert_eq!(
-            Util::trim_display_str("hello!", 3),
-            ("hel", 0, true),
-        );
-        assert_eq!(
-            Util::trim_display_str("hello!", 0),
-            ("", 0, true),
-        );
-        assert_eq!(
-            Util::trim_display_str("hello!", 6),
-            ("hello!", 0, false),
-        );
-        assert_eq!(
-            Util::trim_display_str("oh y̆es", 0),
-            ("", 0, true),
-        );
-        assert_eq!(
-            Util::trim_display_str("oh y̆es", 3),
-            ("oh ", 0, true),
-        );
-        assert_eq!(
-            Util::trim_display_str("oh y̆es", 4),
-            ("oh y̆", 0, true),
-        );
-        assert_eq!(
-            Util::trim_display_str("oh y̆es", 6),
-            ("oh y̆es", 0, false),
-        );
-        assert_eq!(
-            Util::trim_display_str("日本人の氏名", 0),
-            ("", 0, true),
-        );
-        assert_eq!(
-            Util::trim_display_str("日本人の氏名", 1),
-            ("", 1, true),
-        );
-        assert_eq!(
-            Util::trim_display_str("日本人の氏名", 2),
-            ("日", 0, true),
-        );
-    }
 
     #[test]
     fn trim_display_str_elided() {
