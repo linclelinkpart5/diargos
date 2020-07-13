@@ -32,6 +32,12 @@ use crate::model::Model;
 use crate::model::Sizing;
 use crate::util::Util;
 
+enum Atom<'a> {
+    Text(&'a str),
+    Missing,
+    Header,
+}
+
 pub struct TagRecordView {
     shared_model: Arc<Mutex<Model>>,
     scroll_view: ScrollView<Canvas<Arc<Mutex<Model>>>>,
@@ -148,6 +154,63 @@ impl TagRecordView {
 
     pub fn from_data(data: Data) -> Self {
         Self::new(Model::with_data(data))
+    }
+
+    fn draw_delimited_row<'a>(printer: &Printer, offset_y: usize, separator: &str, iter: impl Iterator<Item = (Atom<'a>, usize)>) {
+        let mut offset_x = 0;
+        let mut is_first_col = true;
+
+        for (atom, content_width) in iter {
+            if is_first_col { is_first_col = false; }
+            else {
+                printer.print((offset_x, offset_y), separator);
+                offset_x += separator.width();
+            }
+
+            match atom {
+                Atom::Missing => {
+                    // Print out a highlighted sentinel, to indicate a missing value.
+                    printer.with_color(
+                        ColorStyle::highlight_inactive(),
+                        |pr| {
+                            pr.print_hline(
+                                (offset_x, offset_y),
+                                content_width,
+                                MISSING_FILL,
+                            );
+                        },
+                    );
+
+                },
+                Atom::Header => {
+                    printer.print_hline(
+                        (offset_x, offset_y),
+                        content_width,
+                        COLUMN_HEADER_BAR,
+                    );
+                },
+                Atom::Text(original_string) => {
+                    let trim_output = Util::trim_display_str_elided(
+                        original_string,
+                        content_width,
+                        ELLIPSIS_STR.width(),
+                    );
+
+                    let display_string = trim_output.display_string;
+                    let emit_ellipsis = trim_output.trim_status.emit_ellipsis();
+
+                    printer.print((offset_x, offset_y), &display_string);
+
+                    if emit_ellipsis {
+                        let ellipsis_offset = trim_output.ellipsis_offset();
+
+                        printer.print((offset_x + ellipsis_offset, offset_y), ELLIPSIS_STR);
+                    }
+                },
+            };
+
+            offset_x += content_width;
+        }
     }
 }
 
