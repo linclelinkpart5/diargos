@@ -15,6 +15,13 @@ pub enum TrimStatus {
 }
 
 impl TrimStatus {
+    pub fn was_trimmed(&self) -> bool {
+        match self {
+            Self::Untrimmed => false,
+            Self::Trimmed(..) => true,
+        }
+    }
+
     pub fn padding(&self) -> usize {
         match self {
             Self::Untrimmed => 0,
@@ -138,32 +145,33 @@ impl Util {
     }
 
     pub fn extend_with_fitted_str(buffer: &mut String, original_str: &str, content_width: usize) {
-        let original_width = original_str.width();
+        let trim_output = Util::trim_display_str_elided(original_str, content_width, ELLIPSIS_STR.width());
 
-        let (display_str, padding, emit_ellipsis) =
-            if original_width > content_width {
-                let trimmed_width = content_width.saturating_sub(ELLIPSIS_STR.width());
+        let mut total_printed_width = 0;
 
-                let trim_output = Util::trim_display_str(original_str, trimmed_width);
+        let trimmed_str = trim_output.display_string;
+        let internal_padding = trim_output.trim_status.padding();
+        let emit_ellipsis = trim_output.trim_status.emit_ellipsis();
 
-                let trimmed_str = trim_output.display_string;
-                let internal_padding = trim_output.trim_status.padding();
-                let emit_ellipsis = trim_output.trim_status.emit_ellipsis();
-
-                (trimmed_str, internal_padding, emit_ellipsis)
-            } else {
-                (original_str, content_width - original_width, false)
-            }
-        ;
-
-        buffer.push_str(display_str);
+        buffer.push_str(trimmed_str);
+        total_printed_width += trim_output.output_width;
 
         // Add padding and ellipsis, if needed.
-        for _ in 0..padding {
+        for _ in 0..internal_padding {
             buffer.push(' ');
         }
+        total_printed_width += internal_padding;
+
         if emit_ellipsis {
             buffer.push_str(ELLIPSIS_STR);
+            total_printed_width += ELLIPSIS_STR.width();
+        }
+
+        // Add padding to fill rest of content width.
+        let external_padding = content_width.saturating_sub(total_printed_width);
+
+        for _ in 0..external_padding {
+            buffer.push(' ');
         }
     }
 }
