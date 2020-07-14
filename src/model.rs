@@ -1,6 +1,4 @@
 
-use std::collections::HashSet;
-
 use cursive::XY;
 
 use crate::data::Columns;
@@ -14,18 +12,45 @@ pub enum CursorDir {
     U, D, L, R,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Selection {
-    All,
+pub enum Cursor {
     Cell(usize, usize),
     Column(usize),
 }
 
+impl Cursor {
+    pub fn move_cursor(&mut self, dir: CursorDir, n: usize, max_x: usize, max_y: usize) {
+        match dir {
+            lr @ CursorDir::L | lr @ CursorDir::R => {
+                let x = match self {
+                    Self::Cell(ref mut x, _) => x,
+                    Self::Column(ref mut x) => x,
+                };
+
+                match lr {
+                    CursorDir::L => { *x = x.saturating_sub(n); },
+                    CursorDir::R => { *x = max_x.min(*x + n); },
+                    _ => unreachable!(),
+                };
+            },
+            ud @ CursorDir::U | ud @ CursorDir::D => {
+                let y = match self {
+                    Self::Cell(_, ref mut y) => y,
+                    Self::Column(..) => { return; },
+                };
+
+                match ud {
+                    CursorDir::U => { *y = y.saturating_sub(n); },
+                    CursorDir::D => { *y = max_y.min(*y + n); },
+                    _ => unreachable!(),
+                };
+            },
+        }
+    }
+}
+
 pub struct Model {
     pub data: Data,
-
-    cursor_pos: (usize, usize),
-    selections: HashSet<Selection>,
+    pub cursor: Cursor,
 
     cached_content_widths: Vec<usize>,
     dirty: bool,
@@ -37,9 +62,7 @@ impl Model {
 
         let mut new = Self {
             data,
-
-            cursor_pos: (0, 0),
-            selections: HashSet::new(),
+            cursor: Cursor::Cell(0, 0),
 
             cached_content_widths,
             dirty: true,
@@ -50,39 +73,13 @@ impl Model {
         new
     }
 
-    pub fn column_index(&self) -> Option<usize> {
-        let (x, _) = self.cursor_pos;
-
-        if x < self.data.columns.len() { Some(x) }
-        else { None }
-    }
-
-    pub fn record_index(&self) -> Option<usize> {
-        let (_, y) = self.cursor_pos;
-
-        if y < self.data.records.len() { Some(y) }
-        else { None }
-    }
-
-    pub fn cursor_position(&self) -> Option<(usize, usize)> {
-        let x = self.column_index()?;
-        let y = self.record_index()?;
-
-        Some((x, y))
-    }
-
     fn move_cursor(&mut self, cursor_dir: CursorDir, n: usize) {
-        let (cx, cy) = self.cursor_pos;
-
-        let max_x = self.data.columns.len().saturating_sub(1);
-        let max_y = self.data.records.len().saturating_sub(1);
-
-        self.cursor_pos = match cursor_dir {
-            CursorDir::U => (cx, cy.saturating_sub(n)),
-            CursorDir::D => (cx, max_y.min(cy + n)),
-            CursorDir::L => (cx.saturating_sub(n), cy),
-            CursorDir::R => (max_x.min(cx + n), cy),
-        };
+        self.cursor.move_cursor(
+            cursor_dir,
+            n,
+            self.data.columns.len(),
+            self.data.records.len(),
+        );
     }
 
     pub fn move_cursor_up(&mut self, n: usize) {
@@ -99,58 +96,6 @@ impl Model {
 
     pub fn move_cursor_right(&mut self, n: usize) {
         self.move_cursor(CursorDir::R, n)
-    }
-
-    pub fn select_all(&mut self) {
-        self.selections.clear();
-        self.selections.insert(Selection::All);
-    }
-
-    pub fn select_cell(&mut self, x: usize, y: usize, append: bool) {
-        // If not appending, clear out the existing selection(s).
-        if !append { self.selections.clear(); }
-        self.selections.insert(Selection::Cell(x, y));
-    }
-
-    pub fn select_column(&mut self, col_idx: usize, append: bool) {
-        // If not appending, clear out the existing selection(s).
-        if !append { self.selections.clear(); }
-        self.selections.insert(Selection::Column(col_idx));
-    }
-
-    pub fn select_current_cell(&mut self, append: bool) {
-        // If not appending, clear out the existing selection(s).
-        if !append { self.selections.clear(); }
-
-        if let Some((x, y)) = self.cursor_position() {
-            self.selections.insert(Selection::Cell(x, y));
-        }
-    }
-
-    pub fn select_current_column(&mut self, append: bool) {
-        // If not appending, clear out the existing selection(s).
-        if !append { self.selections.clear(); }
-
-        if let Some(col_idx) = self.column_index() {
-            self.selections.insert(Selection::Column(col_idx));
-        }
-    }
-
-    pub fn deselect_all(&mut self) {
-        self.selections.clear();
-    }
-
-    /// Returns `true` if a given (x, y) position is marked as selected.
-    pub fn is_xy_selected(&self, x: usize, y: usize) -> bool {
-        // Check if this coordinate falls under any of the selections.
-        self.selections.contains(&Selection::All)
-        || self.selections.contains(&Selection::Cell(x, y))
-        || self.selections.contains(&Selection::Column(x))
-    }
-
-    /// Returns `true` if a selection is in progress.
-    pub fn is_selecting(&self) -> bool {
-        !self.selections.is_empty()
     }
 
     pub fn recache(&mut self) {
