@@ -1,5 +1,6 @@
 
 mod consts;
+mod data;
 mod model;
 mod util;
 
@@ -26,10 +27,10 @@ use cursive::views::ScrollView;
 use unicode_width::UnicodeWidthStr;
 
 use crate::consts::*;
-use crate::model::ColumnDef;
-use crate::model::Data;
+use crate::data::ColumnDef;
+use crate::data::Data;
+use crate::data::Sizing;
 use crate::model::Model;
-use crate::model::Sizing;
 use crate::util::Util;
 
 enum Atom<'a> {
@@ -108,11 +109,17 @@ impl TagRecordView {
         Self::new(Model::with_data(data))
     }
 
-    fn draw_delimited_row<'a>(printer: &Printer, offset_y: usize, separator: &str, iter: impl Iterator<Item = (Atom<'a>, usize)>) {
+    fn draw_delimited_row<'a>(
+        printer: &Printer,
+        offset_y: usize,
+        separator: &str,
+        atoms_and_widths: impl Iterator<Item = (Atom<'a>, usize)>,
+    )
+    {
         let mut offset_x = 0;
         let mut is_first_col = true;
 
-        for (atom, content_width) in iter {
+        for (atom, content_width) in atoms_and_widths {
             if is_first_col { is_first_col = false; }
             else {
                 printer.print((offset_x, offset_y), separator);

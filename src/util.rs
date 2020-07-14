@@ -2,8 +2,8 @@
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
-use crate::model::Columns;
-use crate::model::Records;
+use crate::data::Columns;
+use crate::data::Records;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrimStatus {
