@@ -12,39 +12,63 @@ pub enum CursorDir {
     U, D, L, R,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum Cursor {
     Cell(usize, usize),
     Column(usize),
 }
 
 impl Cursor {
-    pub fn move_cursor(&mut self, dir: CursorDir, n: usize, max_x: usize, max_y: usize) {
-        match dir {
-            lr @ CursorDir::L | lr @ CursorDir::R => {
-                let x = match self {
-                    Self::Cell(ref mut x, _) => x,
-                    Self::Column(ref mut x) => x,
-                };
-
-                match lr {
-                    CursorDir::L => { *x = x.saturating_sub(n); },
-                    CursorDir::R => { *x = max_x.min(*x + n); },
-                    _ => unreachable!(),
-                };
+    pub fn clamp(&mut self, bound_x: usize, bound_y: usize) {
+        match self {
+            Self::Cell(ref mut x, ref mut y) => {
+                *x = bound_x.min(*x);
+                *y = bound_y.min(*y);
             },
-            ud @ CursorDir::U | ud @ CursorDir::D => {
-                let y = match self {
-                    Self::Cell(_, ref mut y) => y,
-                    Self::Column(..) => { return; },
-                };
-
-                match ud {
-                    CursorDir::U => { *y = y.saturating_sub(n); },
-                    CursorDir::D => { *y = max_y.min(*y + n); },
-                    _ => unreachable!(),
-                };
+            Self::Column(ref mut x) => {
+                *x = bound_x.min(*x);
             },
+        };
+    }
+
+    pub fn shift(&mut self, dir: CursorDir, n: usize, bound_x: usize, bound_y: usize) {
+        // Skip work if a delta of 0 is given.
+        if n > 0 {
+            match dir {
+                CursorDir::U => {
+                    match self {
+                        Self::Cell(x, ref mut y) => {
+                            match y.checked_sub(n) {
+                                Some(yp) => { *y = yp; }
+                                None => { *self = Self::Column(*x); },
+                            }
+                        },
+                        Self::Column(..) => {}
+                    }
+                },
+                CursorDir::D => {
+                    match self {
+                        Self::Cell(_, ref mut y) => { *y = y.saturating_add(n); },
+                        Self::Column(x) => { *self = Self::Cell(*x, n.saturating_sub(1)); }
+                    }
+                },
+                CursorDir::L => {
+                    match self {
+                        Self::Cell(ref mut x, _) => { *x = x.saturating_sub(n); },
+                        Self::Column(ref mut x) => { *x = x.saturating_sub(n); }
+                    }
+                },
+                CursorDir::R => {
+                    match self {
+                        Self::Cell(ref mut x, _) => { *x = x.saturating_add(n); },
+                        Self::Column(ref mut x) => { *x = x.saturating_add(n); }
+                    }
+                },
+            };
         }
+
+        // Still want to clamp, even if a delta of 0 was given.
+        self.clamp(bound_x, bound_y);
     }
 }
 
@@ -74,12 +98,7 @@ impl Model {
     }
 
     fn move_cursor(&mut self, cursor_dir: CursorDir, n: usize) {
-        self.cursor.move_cursor(
-            cursor_dir,
-            n,
-            self.data.columns.len(),
-            self.data.records.len(),
-        );
+        self.cursor.shift(cursor_dir, n, self.data.columns.len(), self.data.records.len());
     }
 
     pub fn move_cursor_up(&mut self, n: usize) {
