@@ -34,8 +34,8 @@ use crate::model::Model;
 use crate::util::Util;
 
 enum Atom<'a> {
-    Text(&'a str),
-    Missing,
+    Text(&'a str, bool),
+    Missing(bool),
     Header,
 }
 
@@ -75,9 +75,15 @@ impl TagRecordView {
                 for (offset_y, record) in data.records.iter().enumerate() {
                     let atoms_and_widths =
                         data.columns.keys()
-                        .map(|k| match record.get(k) {
-                            None => Atom::Missing,
-                            Some(s) => Atom::Text(s),
+                        .enumerate()
+                        .map(|(x, key)| {
+                            let y = offset_y;
+                            let highlighted = model.is_cursor_at_cell(x, y);
+
+                            match record.get(key) {
+                                None => Atom::Missing(highlighted),
+                                Some(s) => Atom::Text(s, highlighted),
+                            }
                         })
                         .zip(model.iter_cached_widths())
                     ;
@@ -127,10 +133,15 @@ impl TagRecordView {
             }
 
             match atom {
-                Atom::Missing => {
+                Atom::Missing(highlighted) => {
                     // Print out a highlighted sentinel, to indicate a missing value.
+                    let color =
+                        if highlighted { ColorStyle::highlight() }
+                        else { ColorStyle::highlight_inactive() }
+                    ;
+
                     printer.with_color(
-                        ColorStyle::highlight_inactive(),
+                        color,
                         |pr| {
                             pr.print_hline(
                                 (offset_x, offset_y),
@@ -148,7 +159,12 @@ impl TagRecordView {
                         COLUMN_HEADER_BAR,
                     );
                 },
-                Atom::Text(original_string) => {
+                Atom::Text(original_string, highlighted) => {
+                    let color =
+                        if highlighted { ColorStyle::primary() }
+                        else { ColorStyle::secondary() }
+                    ;
+
                     let trim_output = Util::trim_display_str_elided(
                         original_string,
                         content_width,
@@ -158,13 +174,18 @@ impl TagRecordView {
                     let display_string = trim_output.display_string;
                     let emit_ellipsis = trim_output.trim_status.emit_ellipsis();
 
-                    printer.print((offset_x, offset_y), &display_string);
+                    printer.with_color(
+                        color,
+                        |pr| {
+                            pr.print((offset_x, offset_y), &display_string);
 
-                    if emit_ellipsis {
-                        let ellipsis_offset = trim_output.ellipsis_offset();
+                            if emit_ellipsis {
+                                let ellipsis_offset = trim_output.ellipsis_offset();
 
-                        printer.print((offset_x + ellipsis_offset, offset_y), ELLIPSIS_STR);
-                    }
+                                pr.print((offset_x + ellipsis_offset, offset_y), ELLIPSIS_STR);
+                            }
+                        },
+                    );
                 },
             };
 
@@ -188,7 +209,11 @@ impl View for TagRecordView {
 
             let atoms_and_widths =
                 data.columns.values()
-                .map(|column_def| Atom::Text(&column_def.title))
+                .enumerate()
+                .map(|(x, column_def)| {
+                    let highlighted = model.is_cursor_at_column(x);
+                    Atom::Text(&column_def.title, highlighted)
+                })
                 .zip(model.iter_cached_widths())
             ;
 
