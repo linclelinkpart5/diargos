@@ -117,6 +117,22 @@ impl Model {
         self.move_cursor(CursorDir::R, n)
     }
 
+    pub fn is_cursor_at_column(&self, x: usize) -> bool {
+        if let Cursor::Column(cx) = self.cursor {
+            cx == x
+        } else {
+            false
+        }
+    }
+
+    pub fn is_cursor_at_cell(&self, x: usize, y: usize) -> bool {
+        if let Cursor::Cell(cx, cy) = self.cursor {
+            cx == x && cy == y
+        } else {
+            false
+        }
+    }
+
     pub fn recache(&mut self) {
         // Proceed and clear the flag if it was set.
         // Otherwise, bail out.
