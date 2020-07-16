@@ -18,6 +18,7 @@ use cursive::XY;
 use cursive::direction::Direction;
 use cursive::event::Event;
 use cursive::event::EventResult;
+use cursive::event::Key;
 use cursive::theme::ColorStyle;
 use cursive::view::View;
 use cursive::view::scroll::Scroller;
@@ -245,8 +246,20 @@ impl View for TagRecordView {
     }
 
     fn on_event(&mut self, event: Event) -> EventResult {
-        // Forward the event to the inner `ScrollView`.
-        self.scroll_view.on_event(event)
+        match event {
+            Event::Key(Key::Up) => {
+                let mut model = self.shared_model.lock().unwrap();
+                model.move_cursor_up(1);
+                EventResult::Consumed(None)
+            },
+            Event::Key(Key::Down) => {
+                let mut model = self.shared_model.lock().unwrap();
+                model.move_cursor_down(1);
+                EventResult::Consumed(None)
+            },
+            _ => EventResult::Ignored,
+        }
+        // self.scroll_view.on_event(event)
     }
 
     fn take_focus(&mut self, source: Direction) -> bool {
