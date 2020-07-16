@@ -137,7 +137,7 @@ impl TagRecordView {
                     // Print out a highlighted sentinel, to indicate a missing value.
                     let color =
                         if highlighted { ColorStyle::highlight() }
-                        else { ColorStyle::highlight_inactive() }
+                        else { ColorStyle::secondary() }
                     ;
 
                     printer.with_color(
@@ -161,8 +161,8 @@ impl TagRecordView {
                 },
                 Atom::Text(original_string, highlighted) => {
                     let color =
-                        if highlighted { ColorStyle::primary() }
-                        else { ColorStyle::secondary() }
+                        if highlighted { ColorStyle::highlight() }
+                        else { ColorStyle::primary() }
                     ;
 
                     let trim_output = Util::trim_display_str_elided(
@@ -303,7 +303,7 @@ fn main() {
         (1..=num_records)
         .map(|i| {
             let mut m = hashmap! {
-                str!("index") => str!(i),
+                // str!("index") => str!(i),
                 str!("name") => names.choose(&mut rng).unwrap().to_string(),
                 str!("age") => str!((18..=70).choose(&mut rng).unwrap()),
                 str!("score") => str!((0..=100).choose(&mut rng).unwrap()),
