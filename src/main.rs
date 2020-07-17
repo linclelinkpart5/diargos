@@ -15,6 +15,7 @@ use cursive::Cursive;
 use cursive::CursiveExt;
 use cursive::Printer;
 use cursive::XY;
+use cursive::Rect;
 use cursive::direction::Direction;
 use cursive::event::Event;
 use cursive::event::EventResult;
@@ -97,6 +98,24 @@ impl TagRecordView {
                 model.recache();
 
                 model.required_size(COLUMN_SEP.width())
+            })
+            .with_important_area(|shared_model, final_size| {
+                let model = shared_model.lock().unwrap();
+
+                // Figure out the logical X and Y coordinates of the highlighted cell, if any.
+                match model.cursor.to_xy() {
+                    // Return a view showing the entire visible canvas.
+                    None => Rect::from_size((0, 0), final_size),
+                    Some((lx, ly)) => {
+                        let tx = model.column_offset(lx, COLUMN_SEP.width()).unwrap_or(0);
+                        let ty = ly;
+
+                        let dx = model.cached_content_widths.get(lx).copied().unwrap_or(0);
+                        let dy = 1;
+
+                        Rect::from_size((tx, ty), (dx, dy))
+                    },
+                }
             })
         ;
 
@@ -246,19 +265,37 @@ impl View for TagRecordView {
     }
 
     fn on_event(&mut self, event: Event) -> EventResult {
-        match event {
-            Event::Key(Key::Up) => {
-                let mut model = self.shared_model.lock().unwrap();
-                model.move_cursor_up(1);
-                EventResult::Consumed(None)
-            },
-            Event::Key(Key::Down) => {
-                let mut model = self.shared_model.lock().unwrap();
-                model.move_cursor_down(1);
-                EventResult::Consumed(None)
-            },
-            _ => EventResult::Ignored,
+        {
+            let mut model = self.shared_model.lock().unwrap();
+            // let old_cursor = model.cursor;
+
+            match event {
+                Event::Key(Key::Up) => {
+                    model.move_cursor_up(1);
+                },
+                Event::Key(Key::Down) => {
+                    model.move_cursor_down(1);
+                },
+                Event::Key(Key::Left) => {
+                    model.move_cursor_left(1);
+                },
+                Event::Key(Key::Right) => {
+                    model.move_cursor_right(1);
+                },
+                Event::Key(Key::PageUp) => {
+                    model.move_cursor_up(10);
+                },
+                Event::Key(Key::PageDown) => {
+                    model.move_cursor_down(10);
+                },
+                _ => return EventResult::Ignored,
+            };
         }
+
+        self.scroll_view.scroll_to_important_area();
+
+        EventResult::Consumed(None)
+
         // self.scroll_view.on_event(event)
     }
 

@@ -12,13 +12,20 @@ pub enum CursorDir {
     U, D, L, R,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cursor {
     Cell(usize, usize),
     Column(usize),
 }
 
 impl Cursor {
+    pub fn to_xy(&self) -> Option<(usize, usize)> {
+        match self {
+            Self::Cell(x, y) => Some((*x, *y)),
+            Self::Column(..) => None,
+        }
+    }
+
     pub fn clamp(&mut self, bound_x: usize, bound_y: usize) {
         match self {
             Self::Cell(ref mut x, ref mut y) => {
@@ -76,7 +83,7 @@ pub struct Model {
     pub data: Data,
     pub cursor: Cursor,
 
-    cached_content_widths: Vec<usize>,
+    pub cached_content_widths: Vec<usize>,
     dirty: bool,
 }
 
@@ -163,6 +170,18 @@ impl Model {
     pub fn total_display_width(&self, column_sep_width: usize) -> usize {
         let total_sep_width = self.cached_content_widths.len().saturating_sub(1) * column_sep_width;
         self.cached_content_widths.iter().sum::<usize>() + total_sep_width
+    }
+
+    pub fn column_offset(&self, column_index: usize, column_sep_width: usize) -> Option<usize> {
+        if column_index >= self.cached_content_widths.len() {
+            None
+        } else {
+            let offset =
+                self.cached_content_widths.iter().cloned().take(column_index).sum::<usize>()
+                + column_sep_width * column_index
+            ;
+            Some(offset)
+        }
     }
 
     pub fn required_size(&self, column_sep_width: usize) -> XY<usize> {
