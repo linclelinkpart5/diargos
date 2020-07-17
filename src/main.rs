@@ -1,5 +1,6 @@
 
 mod consts;
+mod cursor;
 mod data;
 mod model;
 mod util;
@@ -99,23 +100,23 @@ impl TagRecordView {
 
                 model.required_size(COLUMN_SEP.width())
             })
-            .with_important_area(|shared_model, final_size| {
+            .with_important_area(|shared_model, _final_size| {
                 let model = shared_model.lock().unwrap();
 
                 // Figure out the logical X and Y coordinates of the highlighted cell, if any.
-                match model.cursor.to_xy() {
+                let (lx, ly) = match model.cursor.to_xy() {
                     // Return a view showing the entire visible canvas.
-                    None => Rect::from_size((0, 0), final_size),
-                    Some((lx, ly)) => {
-                        let tx = model.column_offset(lx, COLUMN_SEP.width()).unwrap_or(0);
-                        let ty = ly;
+                    (lx, None) => (lx, 0),
+                    (lx, Some(ly)) => (lx, ly),
+                };
 
-                        let dx = model.cached_content_widths.get(lx).copied().unwrap_or(0);
-                        let dy = 1;
+                let tx = model.column_offset(lx, COLUMN_SEP.width()).unwrap_or(0);
+                let ty = ly;
 
-                        Rect::from_size((tx, ty), (dx, dy))
-                    },
-                }
+                let dx = model.cached_content_widths.get(lx).copied().unwrap_or(0);
+                let dy = 1;
+
+                Rect::from_size((tx, ty), (dx, dy))
             })
         ;
 
