@@ -27,13 +27,16 @@ impl Cursor {
     }
 
     pub fn clamp(&mut self, bound_x: usize, bound_y: usize) {
+        let max_idx_x = bound_x.saturating_sub(1);
+        let max_idx_y = bound_y.saturating_sub(1);
+
         match self {
             Self::Cell(ref mut x, ref mut y) => {
-                *x = bound_x.min(*x);
-                *y = bound_y.min(*y);
+                *x = max_idx_x.min(*x);
+                *y = max_idx_y.min(*y);
             },
             Self::Column(ref mut x) => {
-                *x = bound_x.min(*x);
+                *x = max_idx_x.min(*x);
             },
         };
     }
