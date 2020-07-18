@@ -4,6 +4,7 @@ mod cursor;
 mod data;
 mod model;
 mod util;
+mod views;
 
 use std::sync::Arc;
 use std::sync::Mutex;
