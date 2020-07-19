@@ -32,6 +32,7 @@ struct Opts {
 fn main() {
     use rand::seq::SliceRandom;
     use rand::seq::IteratorRandom;
+    use globset::Glob;
 
     let opts = Opts::parse();
 
@@ -42,9 +43,13 @@ fn main() {
         }
     ;
 
+    let glob = Glob::new("*.flac").unwrap().compile_matcher();
+
     let records =
-        glob::glob("/media/poundcake/old_music/Druma Kina - Walking Away EP/*.flac").unwrap()
+        std::fs::read_dir(&working_dir).unwrap()
         .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| glob.is_match(&p))
         .filter_map(|path| {
             let metadata = path.metadata().ok()?;
             let mtime = FileTime::from_last_modification_time(&metadata);

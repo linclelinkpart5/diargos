@@ -15,7 +15,7 @@ str-macro = "0.1.4"
 maplit = "1.0.2"
 unicode-width = "*"
 clap = "3.0.0-beta.1"
-glob = "0.3"
+globset = "0.4"
 filetime = "0.2"
 
 [dependencies.cursive]
