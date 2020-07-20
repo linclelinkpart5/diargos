@@ -18,6 +18,13 @@ impl Cursor {
         }
     }
 
+    pub fn column_index(&self) -> Option<usize> {
+        match self {
+            Self::Cell(..) => None,
+            Self::Column(x) => Some(*x),
+        }
+    }
+
     pub fn clamp(&mut self, bound_x: usize, bound_y: usize) {
         let max_idx_x = bound_x.saturating_sub(1);
         let max_idx_y = bound_y.saturating_sub(1);
@@ -71,5 +78,13 @@ impl Cursor {
 
         // Still want to clamp, even if a delta of 0 was given.
         self.clamp(bound_x, bound_y);
+    }
+
+    pub fn is_in_column_mode(&self) -> bool {
+        matches!(self, Self::Column(..))
+    }
+
+    pub fn is_in_cell_mode(&self) -> bool {
+        matches!(self, Self::Cell(..))
     }
 }

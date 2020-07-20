@@ -256,6 +256,16 @@ impl View for TagRecordView {
             // let old_cursor = model.cursor;
 
             match event {
+                Event::AltChar('d') => {
+                    if let Some(col_idx) = model.cursor.column_index() {
+                        model.sort_by_column_index(col_idx, true)
+                    }
+                },
+                Event::AltChar('a') => {
+                    if let Some(col_idx) = model.cursor.column_index() {
+                        model.sort_by_column_index(col_idx, false)
+                    }
+                },
                 Event::Key(Key::Up) => {
                     model.move_cursor_up(1);
                 },

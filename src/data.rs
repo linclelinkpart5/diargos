@@ -48,15 +48,19 @@ impl Data {
         IterColumn(column_key, self.records.iter())
     }
 
-    pub fn sort_by_column(&mut self, column_key: &str) {
-        self.records.sort_by(|ra, rb| {
-            match (ra.get(column_key), rb.get(column_key)) {
-                (None, None) => Ordering::Equal,
-                (None, Some(..)) => Ordering::Less,
-                (Some(..), None) => Ordering::Greater,
-                (Some(a), Some(b)) => a.cmp(b),
-            }
-        });
+    pub fn sort_by_column_index(&mut self, column_index: usize, is_descending: bool) {
+        if let Some((column_key, _)) = self.columns.get_index(column_index) {
+            self.records.sort_by(move |ra, rb| {
+                let o = match (ra.get(column_key), rb.get(column_key)) {
+                    (None, None) => Ordering::Equal,
+                    (None, Some(..)) => Ordering::Less,
+                    (Some(..), None) => Ordering::Greater,
+                    (Some(a), Some(b)) => a.cmp(b),
+                };
+
+                if is_descending { o.reverse() } else { o }
+            });
+        }
     }
 }
 

@@ -136,9 +136,10 @@ impl Model {
         result
     }
 
-    pub fn sort_by_column(&mut self, column_key: &str) {
+    pub fn sort_by_column_index(&mut self, column_index: usize, is_descending: bool) {
         // No recaching should be needed with sorting.
-        self.data.sort_by_column(column_key);
+        self.data.sort_by_column_index(column_index, is_descending);
+        self.dirty = true;
     }
 
     pub fn iter_cached_widths<'a>(&'a self) -> impl Iterator<Item = usize> + 'a {
