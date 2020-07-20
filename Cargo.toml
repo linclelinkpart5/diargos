@@ -17,6 +17,7 @@ unicode-width = "*"
 clap = "3.0.0-beta.1"
 globset = "0.4"
 filetime = "0.2"
+metaflac = "0.2"
 
 [dependencies.cursive]
 version = "0.15"

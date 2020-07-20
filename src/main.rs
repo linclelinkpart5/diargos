@@ -17,9 +17,12 @@ use cursive::Cursive;
 use cursive::CursiveExt;
 use cursive::views::Dialog;
 use filetime::FileTime;
+use metaflac::Tag;
+use metaflac::Block;
 
 use crate::data::ColumnDef;
 use crate::data::Data;
+use crate::data::Record;
 use crate::data::Sizing;
 use crate::model::Model;
 use crate::views::TagRecordView;
@@ -47,29 +50,40 @@ fn main() {
 
     let records =
         std::fs::read_dir(&working_dir).unwrap()
-        .filter_map(Result::ok)
-        .map(|e| e.path())
+        .map(|e| e.unwrap().path())
         .filter(|p| glob.is_match(&p))
-        .filter_map(|path| {
-            let metadata = path.metadata().ok()?;
-            let mtime = FileTime::from_last_modification_time(&metadata);
-            Some(
-                hashmap! {
-                    str!("path") => path.display().to_string(),
-                    str!("mtime") => str!(mtime),
+        .map(|path| {
+            let mut record = Record::new();
+            let tag = Tag::read_from_path(&path).unwrap();
+
+            for block in tag.blocks() {
+                if let Block::VorbisComment(vc_map) = block {
+                    for (key, values) in vc_map.comments.iter() {
+                        let combined_value = values.join("|");
+                        record.insert(key.to_string(), combined_value);
+                    }
                 }
-            )
+            }
+
+            let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
+            record.insert(str!("FILENAME"), file_name);
+
+            record
         })
         .collect()
     ;
 
     let columns = indexmap! {
-        str!("path") => ColumnDef {
-            title: str!("File Path"),
+        str!("ARTIST") => ColumnDef {
+            title: str!("Artist"),
             sizing: Sizing::Auto,
         },
-        str!("mtime") => ColumnDef {
-            title: str!("Last Modified"),
+        str!("TITLE") => ColumnDef {
+            title: str!("Title"),
+            sizing: Sizing::Auto,
+        },
+        str!("FILENAME") => ColumnDef {
+            title: str!("File Name"),
             sizing: Sizing::Auto,
         },
     };
