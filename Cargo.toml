@@ -9,14 +9,11 @@ edition = "2018"
 [dependencies]
 indexmap = "1.4"
 cursive_tree_view = "0.6"
-cursive_table_view = "0.12"
-rand = "*"
 str-macro = "0.1.4"
 maplit = "1.0.2"
 unicode-width = "*"
 clap = "3.0.0-beta.1"
 globset = "0.4"
-filetime = "0.2"
 metaflac = "0.2"
 
 [dependencies.cursive]

@@ -9,14 +9,12 @@ mod views;
 use std::path::PathBuf;
 
 use indexmap::indexmap;
-use maplit::hashmap;
 use str_macro::str;
 
 use clap::Clap;
 use cursive::Cursive;
 use cursive::CursiveExt;
 use cursive::views::Dialog;
-use filetime::FileTime;
 use metaflac::Tag;
 use metaflac::Block;
 
@@ -33,8 +31,6 @@ struct Opts {
 }
 
 fn main() {
-    use rand::seq::SliceRandom;
-    use rand::seq::IteratorRandom;
     use globset::Glob;
 
     let opts = Opts::parse();
