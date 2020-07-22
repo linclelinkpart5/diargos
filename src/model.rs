@@ -82,13 +82,20 @@ impl Model {
         for (column_key, column_def) in self.data.columns.iter() {
             let column_sizing = column_def.sizing;
 
-            let content_width = match column_sizing {
-                Sizing::Fixed(width) => width,
-                Sizing::Auto => Util::max_column_content_width(
+            let mccw = || {
+                Util::max_column_content_width(
                     column_key,
                     &self.data.columns,
                     &self.data.records,
-                ),
+                )
+            };
+
+            let content_width = match column_sizing {
+                Sizing::Auto => mccw(),
+                Sizing::Fixed(width) => width,
+                Sizing::Lower(min_width) => mccw().max(min_width),
+                Sizing::Upper(max_width) => mccw().min(max_width),
+                Sizing::Bound(min_width, max_width) => mccw().max(min_width).min(max_width),
             };
 
             self.cached_content_widths.push(content_width);

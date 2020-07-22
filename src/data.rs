@@ -6,9 +6,41 @@ use std::slice::Iter as SliceIter;
 use indexmap::IndexMap;
 
 #[derive(Clone, Copy)]
+pub enum SizingRepr {
+    Auto,
+    Fixed(usize),
+    Lower(usize, ()),
+    Upper((), usize),
+    Bound(usize, usize),
+}
+
+#[derive(Clone, Copy)]
 pub enum Sizing {
     Auto,
     Fixed(usize),
+    Lower(usize),
+    Upper(usize),
+    Bound(usize, usize),
+}
+
+impl From<SizingRepr> for Sizing {
+    fn from(repr: SizingRepr) -> Self {
+        match repr {
+            SizingRepr::Auto => Sizing::Auto,
+            SizingRepr::Fixed(width) => Sizing::Fixed(width),
+            SizingRepr::Lower(min_width, ()) => Sizing::Lower(min_width),
+            SizingRepr::Upper((), max_width) => Sizing::Upper(max_width),
+            SizingRepr::Bound(min_width, max_width) => {
+                // Ensure proper order.
+                if min_width > max_width {
+                    // TODO: Add log message here.
+                    Sizing::Bound(min_width, min_width)
+                } else {
+                    Sizing::Bound(min_width, max_width)
+                }
+            },
+        }
+    }
 }
 
 #[derive(Clone)]
