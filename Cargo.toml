@@ -7,7 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-indexmap = "1.4"
+indexmap = { version = "1.4", features = ["serde-1"] }
 cursive_tree_view = "0.6"
 str-macro = "0.1.4"
 maplit = "1.0.2"
@@ -15,6 +15,8 @@ unicode-width = "*"
 clap = "3.0.0-beta.1"
 globset = "0.4"
 metaflac = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.5"
 
 [dependencies.cursive]
 version = "0.15"

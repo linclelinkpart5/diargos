@@ -4,22 +4,24 @@ use std::collections::HashMap;
 use std::slice::Iter as SliceIter;
 
 use indexmap::IndexMap;
+use serde::Deserialize;
 
-#[derive(Clone, Copy)]
-pub enum SizingRepr {
-    Auto,
-    Fixed(usize),
-    Lower(usize, ()),
-    Upper((), usize),
-    Bound(usize, usize),
-}
-
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Deserialize)]
+#[serde(from = "SizingRepr")]
 pub enum Sizing {
     Auto,
     Fixed(usize),
     Lower(usize),
     Upper(usize),
+    Bound(usize, usize),
+}
+
+#[derive(Clone, Copy, Deserialize)]
+pub enum SizingRepr {
+    Auto,
+    Fixed(usize),
+    Lower(usize, ()),
+    Upper((), usize),
     Bound(usize, usize),
 }
 
@@ -43,7 +45,7 @@ impl From<SizingRepr> for Sizing {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize)]
 pub struct ColumnDef {
     /// A friendly human-readable name for the column, used for display.
     pub title: String,

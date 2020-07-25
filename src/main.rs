@@ -1,4 +1,5 @@
 
+mod config;
 mod consts;
 mod cursor;
 mod data;
