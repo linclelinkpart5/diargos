@@ -6,7 +6,7 @@ use std::slice::Iter as SliceIter;
 use indexmap::IndexMap;
 use serde::Deserialize;
 
-#[derive(Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(from = "SizingRepr")]
 pub enum Sizing {
     Auto,
@@ -17,6 +17,7 @@ pub enum Sizing {
 }
 
 #[derive(Clone, Copy, Deserialize)]
+#[serde(untagged)]
 pub enum SizingRepr {
     Auto,
     Fixed(usize),
@@ -45,7 +46,7 @@ impl From<SizingRepr> for Sizing {
     }
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ColumnDef {
     /// A friendly human-readable name for the column, used for display.
     pub title: String,
