@@ -1,8 +1,15 @@
 
+use std::io::Error as IoError;
+use std::path::Path;
+
+use globset::Glob;
+use metaflac::Tag;
+use metaflac::Block;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
 use crate::data::Columns;
+use crate::data::Record;
 use crate::data::Records;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,6 +135,36 @@ impl Util {
         }
 
         max_seen
+    }
+
+    pub fn read_records_from_dir(working_dir: &Path) -> Result<Records, IoError> {
+        let glob = Glob::new("*.flac").unwrap().compile_matcher();
+        let mut records = Records::new();
+
+        for entry in std::fs::read_dir(&working_dir)? {
+            let path = entry?.path();
+
+            if glob.is_match(&path) {
+                let mut record = Record::new();
+                let tag = Tag::read_from_path(&path).unwrap();
+
+                for block in tag.blocks() {
+                    if let Block::VorbisComment(vc_map) = block {
+                        for (key, values) in vc_map.comments.iter() {
+                            let combined_value = values.join("|");
+                            record.insert(key.to_string(), combined_value);
+                        }
+                    }
+                }
+
+                // let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
+                // record.insert(str!("FILENAME"), file_name);
+
+                records.push(record);
+            }
+        }
+
+        Ok(records)
     }
 }
 

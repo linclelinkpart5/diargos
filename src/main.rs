@@ -11,13 +11,13 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-use indexmap::indexmap;
 use str_macro::str;
 
 use clap::Clap;
 use cursive::Cursive;
 use cursive::CursiveExt;
 use cursive::views::Dialog;
+use globset::Glob;
 use metaflac::Tag;
 use metaflac::Block;
 
@@ -25,6 +25,7 @@ use crate::config::Config;
 use crate::data::Data;
 use crate::data::Record;
 use crate::model::Model;
+use crate::util::Util;
 use crate::views::TagRecordView;
 
 #[derive(Clap)]
@@ -34,8 +35,6 @@ struct Opts {
 }
 
 fn main() {
-    use globset::Glob;
-
     let opts = Opts::parse();
 
     let working_dir =
@@ -58,30 +57,7 @@ fn main() {
 
     let glob = Glob::new("*.flac").unwrap().compile_matcher();
 
-    let records =
-        std::fs::read_dir(&working_dir).unwrap()
-        .map(|e| e.unwrap().path())
-        .filter(|p| glob.is_match(&p))
-        .map(|path| {
-            let mut record = Record::new();
-            let tag = Tag::read_from_path(&path).unwrap();
-
-            for block in tag.blocks() {
-                if let Block::VorbisComment(vc_map) = block {
-                    for (key, values) in vc_map.comments.iter() {
-                        let combined_value = values.join("|");
-                        record.insert(key.to_string(), combined_value);
-                    }
-                }
-            }
-
-            let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
-            record.insert(str!("FILENAME"), file_name);
-
-            record
-        })
-        .collect()
-    ;
+    let records = Util::read_records_from_dir(&working_dir).unwrap();
 
     // let columns = indexmap! {
     //     str!("ARTIST") => ColumnDef {
