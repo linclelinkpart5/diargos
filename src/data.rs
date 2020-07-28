@@ -3,7 +3,6 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::slice::Iter as SliceIter;
 
-use indexmap::IndexMap;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -47,7 +46,10 @@ impl From<SizingRepr> for Sizing {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ColumnDef {
+pub struct Column {
+    /// The raw string metadata key for this column.
+    pub key: String,
+
     /// A friendly human-readable name for the column, used for display.
     pub title: String,
 
@@ -59,7 +61,7 @@ pub struct ColumnDef {
 
 pub type Record = HashMap<String, String>;
 
-pub type Columns = IndexMap<String, ColumnDef>;
+pub type Columns = Vec<Column>;
 pub type Records = Vec<Record>;
 
 pub struct Data {
@@ -84,7 +86,8 @@ impl Data {
     }
 
     pub fn sort_by_column_index(&mut self, column_index: usize, is_descending: bool) {
-        if let Some((column_key, _)) = self.columns.get_index(column_index) {
+        if let Some(column) = self.columns.get(column_index) {
+            let column_key = &column.key;
             self.records.sort_by(move |ra, rb| {
                 let o = match (ra.get(column_key), rb.get(column_key)) {
                     (None, None) => Ordering::Equal,

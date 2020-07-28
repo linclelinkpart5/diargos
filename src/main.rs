@@ -11,19 +11,13 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-use str_macro::str;
-
 use clap::Clap;
 use cursive::Cursive;
 use cursive::CursiveExt;
 use cursive::views::Dialog;
-use globset::Glob;
-use metaflac::Tag;
-use metaflac::Block;
 
 use crate::config::Config;
 use crate::data::Data;
-use crate::data::Record;
 use crate::model::Model;
 use crate::util::Util;
 use crate::views::TagRecordView;
@@ -55,24 +49,8 @@ fn main() {
         }
     ;
 
-    let glob = Glob::new("*.flac").unwrap().compile_matcher();
-
     let records = Util::read_records_from_dir(&working_dir).unwrap();
 
-    // let columns = indexmap! {
-    //     str!("ARTIST") => ColumnDef {
-    //         title: str!("Artist"),
-    //         sizing: Sizing::Auto,
-    //     },
-    //     str!("TITLE") => ColumnDef {
-    //         title: str!("Title"),
-    //         sizing: Sizing::Auto,
-    //     },
-    //     str!("FILENAME") => ColumnDef {
-    //         title: str!("File Name"),
-    //         sizing: Sizing::Auto,
-    //     },
-    // };
     let columns = config.columns;
 
     let data = Data::with_data(columns, records);

@@ -62,11 +62,13 @@ impl TagRecordView {
 
                 for (offset_y, record) in data.records.iter().enumerate() {
                     let atoms_and_widths =
-                        data.columns.keys()
+                        data.columns.iter()
                         .enumerate()
-                        .map(|(x, key)| {
+                        .map(|(x, col)| {
                             let y = offset_y;
                             let highlighted = model.is_cursor_at_cell(x, y);
+
+                            let key = &col.key;
 
                             match record.get(key) {
                                 None => Atom::Missing(highlighted),
@@ -214,11 +216,11 @@ impl View for TagRecordView {
             let left_offset_printer = printer.content_offset((content_viewport.left(), 0));
 
             let atoms_and_widths =
-                data.columns.values()
+                data.columns.iter()
                 .enumerate()
-                .map(|(x, column_def)| {
+                .map(|(x, col)| {
                     let highlighted = model.is_cursor_at_column(x);
-                    Atom::Text(&column_def.title, highlighted)
+                    Atom::Text(&col.title, highlighted)
                 })
                 .zip(model.iter_cached_widths())
             ;

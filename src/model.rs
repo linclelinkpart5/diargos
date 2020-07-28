@@ -79,13 +79,12 @@ impl Model {
         self.cached_content_widths.clear();
         self.cached_content_widths.reserve(self.data.columns.len());
 
-        for (column_key, column_def) in self.data.columns.iter() {
-            let column_sizing = column_def.sizing;
+        for column in self.data.columns.iter() {
+            let column_sizing = column.sizing;
 
             let mccw = || {
                 Util::max_column_content_width(
-                    column_key,
-                    &self.data.columns,
+                    &column,
                     &self.data.records,
                 )
             };

@@ -1,10 +1,9 @@
 
-use indexmap::indexmap;
 use serde::Deserialize;
 use str_macro::str;
 
 use crate::data::Columns;
-use crate::data::ColumnDef;
+use crate::data::Column;
 use crate::data::Sizing;
 
 #[derive(Debug, Deserialize)]
@@ -15,24 +14,28 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            columns: indexmap! {
-                str!("ARTIST") => ColumnDef {
+            columns: vec![
+                Column {
+                    key: str!("ARTIST"),
                     title: str!("Artist"),
                     sizing: Sizing::Auto,
                 },
-                str!("TITLE") => ColumnDef {
+                Column {
+                    key: str!("TITLE"),
                     title: str!("Title"),
                     sizing: Sizing::Auto,
                 },
-                str!("ALBUM") => ColumnDef {
+                Column {
+                    key: str!("ALBUM"),
                     title: str!("Album"),
                     sizing: Sizing::Auto,
                 },
-                str!("FILENAME") => ColumnDef {
+                Column {
+                    key: str!("FILENAME"),
                     title: str!("File Name"),
                     sizing: Sizing::Auto,
                 },
-            },
+            ],
         }
     }
 }
@@ -44,20 +47,23 @@ mod test {
     #[test]
     fn deserialize() {
         let input = r#"{
-            "columns": {
-                "ARTIST": {
+            "columns": [
+                {
+                    "key": "ARTIST",
                     "title": "Artist",
                     "sizing": null
                 },
-                "TITLE": {
+                {
+                    "key": "TITLE",
                     "title": "Title",
                     "sizing": null
                 },
-                "FILENAME": {
+                {
+                    "key": "FILENAME",
                     "title": "File Name",
                     "sizing": null
                 }
-            }
+            ]
         }"#;
 
         let config = serde_json::from_str::<Config>(&input).unwrap();

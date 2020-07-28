@@ -8,7 +8,7 @@ use metaflac::Block;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
-use crate::data::Columns;
+use crate::data::Column;
 use crate::data::Record;
 use crate::data::Records;
 
@@ -123,11 +123,9 @@ impl Util {
         }
     }
 
-    pub fn max_column_content_width(column_key: &str, columns: &Columns, records: &Records) -> usize {
-        let mut max_seen = match columns.get(column_key) {
-            Some(column_def) => column_def.title.width(),
-            None => { return 0; },
-        };
+    pub fn max_column_content_width(column: &Column, records: &Records) -> usize {
+        let mut max_seen = column.title.width();
+        let column_key = &column.key;
 
         for record in records.iter() {
             let curr_row_width = record.get(column_key).map(|s| s.width()).unwrap_or(0);
