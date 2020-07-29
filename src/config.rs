@@ -5,6 +5,7 @@ use str_macro::str;
 use crate::data::Column;
 use crate::data::Columns;
 use crate::data::ColumnKey;
+use crate::data::InfoKind;
 use crate::data::Sizing;
 
 #[derive(Debug, Deserialize)]
@@ -32,7 +33,7 @@ impl Default for Config {
                     sizing: Sizing::Auto,
                 },
                 Column {
-                    key: ColumnKey::Meta(str!("FILENAME")),
+                    key: ColumnKey::Info(InfoKind::FileName),
                     title: str!("File Name"),
                     sizing: Sizing::Auto,
                 },
@@ -60,7 +61,7 @@ mod test {
                     "sizing": null
                 },
                 {
-                    "meta": "FILENAME",
+                    "info": "file_name",
                     "title": "File Name",
                     "sizing": null
                 }

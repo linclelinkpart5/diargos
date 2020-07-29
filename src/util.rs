@@ -1,4 +1,5 @@
 
+use std::collections::HashMap;
 use std::io::Error as IoError;
 use std::path::Path;
 
@@ -143,20 +144,20 @@ impl Util {
             let path = entry?.path();
 
             if glob.is_match(&path) {
-                let mut record = Record::new();
+                let mut metadata = HashMap::new();
+
                 let tag = Tag::read_from_path(&path).unwrap();
 
                 for block in tag.blocks() {
                     if let Block::VorbisComment(vc_map) = block {
                         for (key, values) in vc_map.comments.iter() {
                             let combined_value = values.join("|");
-                            record.metadata.insert(key.to_string(), combined_value);
+                            metadata.insert(key.to_string(), combined_value);
                         }
                     }
                 }
 
-                // let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
-                // record.insert(str!("FILENAME"), file_name);
+                let record = Record::new(metadata, path);
 
                 records.push(record);
             }

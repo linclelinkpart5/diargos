@@ -81,11 +81,8 @@ pub struct Record {
 }
 
 impl Record {
-    pub fn new() -> Self {
-        Self {
-            metadata: HashMap::new(),
-            file_path: PathBuf::new(),
-        }
+    pub fn new(metadata: HashMap<String, String>, file_path: PathBuf) -> Self {
+        Self { metadata, file_path }
     }
 
     pub fn get_meta(&self, meta_key: &str) -> Option<&str> {
