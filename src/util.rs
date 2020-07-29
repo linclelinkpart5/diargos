@@ -150,7 +150,7 @@ impl Util {
                     if let Block::VorbisComment(vc_map) = block {
                         for (key, values) in vc_map.comments.iter() {
                             let combined_value = values.join("|");
-                            record.insert(key.to_string(), combined_value);
+                            record.metadata.insert(key.to_string(), combined_value);
                         }
                     }
                 }

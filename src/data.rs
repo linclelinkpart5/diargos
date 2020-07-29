@@ -1,6 +1,7 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::slice::Iter as SliceIter;
 
 use serde::Deserialize;
@@ -45,10 +46,25 @@ impl From<SizingRepr> for Sizing {
     }
 }
 
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InfoKind {
+    FileName,
+    FilePath,
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ColumnKey {
+    Meta(String),
+    Info(InfoKind),
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Column {
     /// The raw string metadata key for this column.
-    pub key: String,
+    #[serde(flatten)]
+    pub key: ColumnKey,
 
     /// A friendly human-readable name for the column, used for display.
     pub title: String,
@@ -59,7 +75,37 @@ pub struct Column {
     pub sizing: Sizing,
 }
 
-pub type Record = HashMap<String, String>;
+pub struct Record {
+    pub metadata: HashMap<String, String>,
+    pub file_path: PathBuf,
+}
+
+impl Record {
+    pub fn new() -> Self {
+        Self {
+            metadata: HashMap::new(),
+            file_path: PathBuf::new(),
+        }
+    }
+
+    pub fn get_meta(&self, meta_key: &str) -> Option<&str> {
+        self.metadata.get(meta_key).map(AsRef::as_ref)
+    }
+
+    pub fn get_info(&self, info_kind: &InfoKind) -> Option<&str> {
+        match info_kind {
+            InfoKind::FileName => self.file_path.file_name().and_then(|f| f.to_str()),
+            InfoKind::FilePath => self.file_path.to_str(),
+        }
+    }
+
+    pub fn get(&self, column_key: &ColumnKey) -> Option<&str> {
+        match column_key {
+            ColumnKey::Meta(ref meta_key) => self.get_meta(meta_key),
+            ColumnKey::Info(ref info_kind) => self.get_info(info_kind),
+        }
+    }
+}
 
 pub type Columns = Vec<Column>;
 pub type Records = Vec<Record>;
@@ -115,7 +161,7 @@ impl<'a> Iterator for IterColumn<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let record = self.1.next()?;
-        Some(record.get(self.0))
+        Some(record.metadata.get(self.0))
     }
 }
 

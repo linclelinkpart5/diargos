@@ -2,8 +2,9 @@
 use serde::Deserialize;
 use str_macro::str;
 
-use crate::data::Columns;
 use crate::data::Column;
+use crate::data::Columns;
+use crate::data::ColumnKey;
 use crate::data::Sizing;
 
 #[derive(Debug, Deserialize)]
@@ -16,22 +17,22 @@ impl Default for Config {
         Self {
             columns: vec![
                 Column {
-                    key: str!("ARTIST"),
+                    key: ColumnKey::Meta(str!("ARTIST")),
                     title: str!("Artist"),
                     sizing: Sizing::Auto,
                 },
                 Column {
-                    key: str!("TITLE"),
+                    key: ColumnKey::Meta(str!("TITLE")),
                     title: str!("Title"),
                     sizing: Sizing::Auto,
                 },
                 Column {
-                    key: str!("ALBUM"),
+                    key: ColumnKey::Meta(str!("ALBUM")),
                     title: str!("Album"),
                     sizing: Sizing::Auto,
                 },
                 Column {
-                    key: str!("FILENAME"),
+                    key: ColumnKey::Meta(str!("FILENAME")),
                     title: str!("File Name"),
                     sizing: Sizing::Auto,
                 },
@@ -49,17 +50,17 @@ mod test {
         let input = r#"{
             "columns": [
                 {
-                    "key": "ARTIST",
+                    "meta": "ARTIST",
                     "title": "Artist",
                     "sizing": null
                 },
                 {
-                    "key": "TITLE",
+                    "meta": "TITLE",
                     "title": "Title",
                     "sizing": null
                 },
                 {
-                    "key": "FILENAME",
+                    "meta": "FILENAME",
                     "title": "File Name",
                     "sizing": null
                 }
