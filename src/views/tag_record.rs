@@ -179,13 +179,13 @@ impl TagRecordView {
                         ELLIPSIS_STR.width(),
                     );
 
-                    let display_string = trim_output.display_string;
+                    let display_str = trim_output.display_str;
                     let emit_ellipsis = trim_output.trim_status.emit_ellipsis();
 
                     printer.with_color(
                         color,
                         |pr| {
-                            pr.print((offset_x, offset_y), &display_string);
+                            pr.print((offset_x, offset_y), &display_str);
 
                             if emit_ellipsis {
                                 let ellipsis_offset = trim_output.ellipsis_offset();

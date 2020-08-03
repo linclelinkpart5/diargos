@@ -1,5 +1,6 @@
 
 pub const ELLIPSIS_STR: &str = "⋯";
+pub const FIELD_SEP_STR: &str = "|";
 
 pub const MISSING_FILL: &str = "x";
 
