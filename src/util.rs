@@ -60,14 +60,16 @@ impl<'a> TrimOutput<'a> {
 #[derive(Debug, Clone, Copy)]
 struct Interpolator<'a> {
     values: &'a [&'a str],
+    separator: &'a str,
     index: usize,
     emit_sep: bool,
 }
 
 impl<'a> Interpolator<'a> {
-    pub fn new(values: &'a [&'a str]) -> Self {
+    pub fn new(values: &'a [&'a str], separator: &'a str) -> Self {
         Self {
             values,
+            separator,
             index: 0,
             emit_sep: false,
         }
@@ -81,7 +83,7 @@ impl<'a> Iterator for Interpolator<'a> {
         let ret = if self.emit_sep {
             // Only emit separator if there is another value after it.
             self.values.get(self.index)?;
-            FIELD_SEP_STR
+            self.separator
         }
         else {
             let s = self.values.get(self.index)?;
@@ -94,12 +96,6 @@ impl<'a> Iterator for Interpolator<'a> {
         Some(ret)
     }
 }
-
-// #[derive(Debug, Clone, Copy)]
-// pub enum Figment<'a> {
-//     Value(&'a str),
-//     Separator,
-// }
 
 type SavePoint<'a> = (usize, TrimOutput<'a>, Interpolator<'a>);
 
@@ -250,7 +246,7 @@ impl Util {
 
         let mut used_width = 0;
         let mut save_point = None;
-        let figment_iter = Interpolator::new(values);
+        let figment_iter = Interpolator::new(values, FIELD_SEP_STR);
 
         for figment in figment_iter {
             // Some uncontested width remaining.
@@ -463,5 +459,64 @@ mod test {
                 trim_status: TrimStatus::Trimmed(0, true),
             },
         );
+    }
+
+    #[test]
+    fn interpolator() {
+        let i = Interpolator {
+            values: &["HELLO", "WORLD"],
+            separator: "////",
+            index: 0,
+            emit_sep: false,
+        };
+        assert_eq!(i.collect::<Vec<_>>(), vec!["HELLO", "////", "WORLD"]);
+
+        let i = Interpolator {
+            values: &["HELLO", "WORLD"],
+            separator: "////",
+            index: 0,
+            emit_sep: true,
+        };
+        assert_eq!(i.collect::<Vec<_>>(), vec!["////","HELLO", "////", "WORLD"]);
+
+        let i = Interpolator {
+            values: &["HELLO", "WORLD"],
+            separator: "////",
+            index: 1,
+            emit_sep: false,
+        };
+        assert_eq!(i.collect::<Vec<_>>(), vec!["WORLD"]);
+
+        let i = Interpolator {
+            values: &["HELLO", "WORLD"],
+            separator: "////",
+            index: 1,
+            emit_sep: true,
+        };
+        assert_eq!(i.collect::<Vec<_>>(), vec!["////", "WORLD"]);
+
+        let i = Interpolator {
+            values: &["HELLO", "WORLD"],
+            separator: "////",
+            index: 2,
+            emit_sep: false,
+        };
+        assert_eq!(i.collect::<Vec<&str>>(), Vec::<&str>::new());
+
+        let i = Interpolator {
+            values: &["HELLO", "WORLD"],
+            separator: "////",
+            index: 2,
+            emit_sep: true,
+        };
+        assert_eq!(i.collect::<Vec<&str>>(), Vec::<&str>::new());
+
+        let i = Interpolator {
+            values: &["WOW", "COOL", "RAD", "NEAT", "AYY"],
+            separator: "|",
+            index: 0,
+            emit_sep: false,
+        };
+        assert_eq!(i.collect::<Vec<_>>(), vec!["WOW", "|", "COOL", "|", "RAD", "|", "NEAT", "|", "AYY"]);
     }
 }
