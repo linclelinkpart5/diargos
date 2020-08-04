@@ -56,21 +56,6 @@ impl<'a> TrimOutput<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum StopPointKind { Val, Sep }
-
-#[derive(Debug, Clone, Copy)]
-struct StopPoint {
-    kind: StopPointKind,
-    index: usize,
-    ch_pos: usize,
-}
-
-struct Stub<'a> {
-    trimmed_str: &'a str,
-    trimmed_width: usize,
-}
-
 /// Alternates between yielding strings from a slice and a separator string.
 #[derive(Debug, Clone, Copy)]
 struct Interpolator<'a> {
@@ -115,6 +100,8 @@ impl<'a> Iterator for Interpolator<'a> {
 //     Value(&'a str),
 //     Separator,
 // }
+
+type SavePoint<'a> = (usize, TrimOutput<'a>, Interpolator<'a>);
 
 pub struct Util;
 
@@ -247,12 +234,7 @@ impl Util {
         Ok(records)
     }
 
-    fn raw_draw(
-        printer: &Printer,
-        values: &[&str],
-        target_width: usize,
-    )
-    {
+    fn raw_draw(printer: &Printer, values: &[&str], target_width: usize) {
         // If the ellipsis is too wide for the target width, do not try and print it.
         let ellipsis_width =
             match ELLIPSIS_STR.width() {
@@ -267,13 +249,10 @@ impl Util {
         let uc_width = target_width.saturating_sub(ellipsis_width);
 
         let mut used_width = 0;
+        let mut save_point = None;
+        let figment_iter = Interpolator::new(values);
 
-        let mut save_point: Option<(usize, TrimOutput<'_>)> = None;
-
-        let master_iter = Interpolator::new(values);
-        let mut backup_iter = master_iter.clone();
-
-        for figment in master_iter {
+        for figment in figment_iter {
             // Some uncontested width remaining.
             if let Some(rem_uc_width) = uc_width.checked_sub(used_width) {
                 // Try doing a non-elided trim with the remaining
@@ -285,20 +264,18 @@ impl Util {
 
                 if save_point.is_none() && trim_status.is_trimmed() {
                     // The remaining width was not enough to fully print this
-                    // figment. Save the current offset and the trim result.
-                    // Also, stop advancing the backup iterator.
-                    save_point = Some((used_width, trim_output));
+                    // figment. Save the current offset, trim result, and
+                    // iterator state.
+                    save_point = Some((used_width, trim_output, figment_iter.clone()));
                 }
                 else {
-                    // No trimming occured, print the string and advance the
-                    // backup iterator.
+                    // No trimming occured, just print the string.
                     printer.print((used_width, 0), figment);
-                    backup_iter.next();
                 }
 
                 // In either case, update the current taken width with the full
                 // real width of the figment.
-                used_width += trim_output.ellipsis_offset();
+                used_width = used_width.saturating_add(trim_output.full_real_width);
             }
 
             // See if the current taken width now exceeds the target width.
@@ -306,17 +283,15 @@ impl Util {
                 // The attempted string overflowed the target width.
                 // Just print out the save point, padding, and ellipsis, and
                 // then return.
-                let (mut offset_x, trim_output) = save_point.unwrap();
-                let display_str = trim_output.display_str;
-                let trim_status = trim_output.trim_status;
+                let (mut offset_x, trim_output, _) = save_point.unwrap();
 
                 // Print the last trimmed string.
-                printer.print((offset_x, 0), display_str);
+                printer.print((offset_x, 0), trim_output.display_str);
 
                 // Increment the offset and draw the ellipsis, if available.
                 offset_x = offset_x.saturating_add(trim_output.ellipsis_offset());
 
-                if trim_status.emit_ellipsis() {
+                if trim_output.trim_status.emit_ellipsis() {
                     printer.print((offset_x, 0), ELLIPSIS_STR);
                 }
 
@@ -324,7 +299,17 @@ impl Util {
             }
         }
 
-        // TODO: AT THIS POINT, THE ENTIRE STRING FITS, RESUME FROM THE BACKUP ITERATOR.
+        // At this point, the entire delimited string fits in the target width.
+        // If no save point has been registered, that means the entire string
+        // has already been printed out, so just return. Else, use the saved
+        // figment iterator and starting offset to print out the remaining
+        // unprinted figments.
+        if let Some((mut offset_x, _, backup_iter)) = save_point {
+            for figment in backup_iter {
+                printer.print((offset_x, 0), figment);
+                offset_x = offset_x.saturating_add(figment.width());
+            }
+        }
     }
 }
 
