@@ -46,6 +46,7 @@ impl TrimStatus {
 pub struct TrimOutput<'a> {
     pub display_str: &'a str,
     pub output_width: usize,
+    pub full_real_width: usize,
     pub trim_status: TrimStatus,
 }
 
@@ -144,6 +145,10 @@ impl Util {
         let mut elided_i = 0;
         let mut past_elision_point = false;
 
+        // This is the width of the actual trimmed display string,
+        // without the ellipsis. Including here to save cycles later on.
+        let mut output_width = 0;
+
         // Padding is used for when the trim cutoff point occurs in the middle
         // of a multiwidth character. The character cut in the middle will be
         // trimmed, and padding will be calculated to fit the remining width.
@@ -163,6 +168,7 @@ impl Util {
                 past_elision_point = true;
                 elided_i = i;
                 padding = elided_width - last_width;
+                output_width = last_width;
             }
 
             // Stop once the current width strictly exceeds the target width.
@@ -171,27 +177,30 @@ impl Util {
                 // or was too big to fit in the target width, do not print it.
                 let print_ellipsis = ellipsis_width != 0;
 
-                // This is the width of the actual trimmed display string,
-                // without the ellipsis. Including here to save cycles later on.
-                let output_width = elided_width.saturating_sub(padding);
                 // assert_eq!(output_width, &original_str[..elided_i].width());
 
-                // At this point, the elided width should be used.
+                // Saving cycles later on by calculating the width of the original
+                // string, as if it were untrimmed.
+                let full_real_width = original_str[elided_i..].width().saturating_add(output_width);
+
                 return TrimOutput {
                     display_str: &original_str[..elided_i],
                     output_width,
+                    full_real_width,
                     trim_status: TrimStatus::Trimmed(padding, print_ellipsis),
                 };
             }
         }
 
-        // In this case, the output width is the current width.
+        // In this case, the output width and the full real width are the current width.
         let output_width = curr_width;
+        let full_real_width = curr_width;
 
         // The string does not need trimming, just return unchanged.
         TrimOutput {
             display_str: original_str,
             output_width,
+            full_real_width,
             trim_status: TrimStatus::Untrimmed,
         }
     }
@@ -244,11 +253,6 @@ impl Util {
         target_width: usize,
     )
     {
-        struct SavePoint<'a> {
-            offset_x: usize,
-            trim_output: TrimOutput<'a>,
-        }
-
         // If the ellipsis is too wide for the target width, do not try and print it.
         let ellipsis_width =
             match ELLIPSIS_STR.width() {
@@ -260,58 +264,67 @@ impl Util {
         // This is the width that is always used by text. It will never
         // be possible to draw the ellipsis, if there is one, in this region.
         // The uncontested width will always be no larger than the target width.
-        let uncontested_width = target_width.saturating_sub(ellipsis_width);
+        let uc_width = target_width.saturating_sub(ellipsis_width);
 
-        let mut curr_taken_width = 0;
-        let mut save_point = SavePoint {
-            offset_x: 0,
-            trim_output: TrimOutput {
-                display_str: "",
-                output_width: 0,
-                trim_status: TrimStatus::Untrimmed,
-            },
-        };
+        let mut used_width = 0;
+
+        let mut save_point: Option<(usize, TrimOutput<'_>)> = None;
 
         let master_iter = Interpolator::new(values);
         let mut backup_iter = master_iter.clone();
 
         for figment in master_iter {
-            // See if the current figment fits in the remaining uncontested width.
-            match uncontested_width.checked_sub(curr_taken_width) {
-                // Some uncontested width remaining, see if it is enough to
-                // use right now.
-                Some(rem_uc_width) => {
-                    // Try doing a non-elided trim with the remaining
-                    // uncontested width.
-                    let trim_output = Self::trim_display_str(FIELD_SEP_STR, rem_uc_width);
+            // Some uncontested width remaining.
+            if let Some(rem_uc_width) = uc_width.checked_sub(used_width) {
+                // Try doing a non-elided trim with the remaining
+                // uncontested width, in order to see if the current figment
+                // can fit in the remaining uncontested width.
+                let trim_output = Self::trim_display_str(figment, rem_uc_width);
 
-                    let trim_status = &trim_output.trim_status;
+                let trim_status = &trim_output.trim_status;
 
-                    if trim_status.is_trimmed() {
-                        // The remaining width was not enough to fully print this
-                        // figment. Save the current offset and the trim result.
-                        // Also, stop advancing the backup iterator.
-                        save_point = SavePoint {
-                            offset_x: curr_taken_width,
-                            trim_output,
-                        };
-                    }
-                    else {
-                        // No trimming occured, print the string and advance the
-                        // backup iterator.
-                        printer.print((curr_taken_width, 0), figment);
-                        backup_iter.next();
-                    }
+                if save_point.is_none() && trim_status.is_trimmed() {
+                    // The remaining width was not enough to fully print this
+                    // figment. Save the current offset and the trim result.
+                    // Also, stop advancing the backup iterator.
+                    save_point = Some((used_width, trim_output));
+                }
+                else {
+                    // No trimming occured, print the string and advance the
+                    // backup iterator.
+                    printer.print((used_width, 0), figment);
+                    backup_iter.next();
+                }
 
-                    // In either case, update the current taken width.
-                    curr_taken_width += (trim_output.output_width + trim_status.padding());
-                },
+                // In either case, update the current taken width with the full
+                // real width of the figment.
+                used_width += trim_output.ellipsis_offset();
+            }
 
-                // Already past the point of uncontested width.
-                // TODO: HAVE THIS BE A SEPARATE IF BRANCH AFTER THE LAST ONE!
-                None => {},
+            // See if the current taken width now exceeds the target width.
+            if used_width > target_width {
+                // The attempted string overflowed the target width.
+                // Just print out the save point, padding, and ellipsis, and
+                // then return.
+                let (mut offset_x, trim_output) = save_point.unwrap();
+                let display_str = trim_output.display_str;
+                let trim_status = trim_output.trim_status;
+
+                // Print the last trimmed string.
+                printer.print((offset_x, 0), display_str);
+
+                // Increment the offset and draw the ellipsis, if available.
+                offset_x = offset_x.saturating_add(trim_output.ellipsis_offset());
+
+                if trim_status.emit_ellipsis() {
+                    printer.print((offset_x, 0), ELLIPSIS_STR);
+                }
+
+                return;
             }
         }
+
+        // TODO: AT THIS POINT, THE ENTIRE STRING FITS, RESUME FROM THE BACKUP ITERATOR.
     }
 }
 
@@ -326,6 +339,7 @@ mod test {
             TrimOutput {
                 display_str: "",
                 output_width: 0,
+                full_real_width: 6,
                 trim_status: TrimStatus::Trimmed(0, false),
             },
         );
@@ -334,6 +348,7 @@ mod test {
             TrimOutput {
                 display_str: "he",
                 output_width: 2,
+                full_real_width: 6,
                 trim_status: TrimStatus::Trimmed(0, true)
             },
         );
@@ -342,6 +357,7 @@ mod test {
             TrimOutput {
                 display_str: "hell",
                 output_width: 4,
+                full_real_width: 6,
                 trim_status: TrimStatus::Trimmed(0, true),
             },
         );
@@ -350,6 +366,7 @@ mod test {
             TrimOutput {
                 display_str: "hello",
                 output_width: 5,
+                full_real_width: 6,
                 trim_status: TrimStatus::Trimmed(0, false),
             },
         );
@@ -358,6 +375,7 @@ mod test {
             TrimOutput {
                 display_str: "hello!",
                 output_width: 6,
+                full_real_width: 6,
                 trim_status: TrimStatus::Untrimmed,
             },
         );
@@ -366,6 +384,7 @@ mod test {
             TrimOutput {
                 display_str: "",
                 output_width: 0,
+                full_real_width: 6,
                 trim_status: TrimStatus::Trimmed(0, false),
             },
         );
@@ -374,6 +393,7 @@ mod test {
             TrimOutput {
                 display_str: "oh ",
                 output_width: 3,
+                full_real_width: 6,
                 trim_status: TrimStatus::Trimmed(0, true),
             },
         );
@@ -382,6 +402,7 @@ mod test {
             TrimOutput {
                 display_str: "oh y̆",
                 output_width: 4,
+                full_real_width: 6,
                 trim_status: TrimStatus::Trimmed(0, true),
             },
         );
@@ -390,6 +411,7 @@ mod test {
             TrimOutput {
                 display_str: "oh y̆e",
                 output_width: 5,
+                full_real_width: 6,
                 trim_status: TrimStatus::Trimmed(0, false),
             },
         );
@@ -398,6 +420,7 @@ mod test {
             TrimOutput {
                 display_str: "oh y̆es",
                 output_width: 6,
+                full_real_width: 6,
                 trim_status: TrimStatus::Untrimmed,
             },
         );
@@ -406,6 +429,7 @@ mod test {
             TrimOutput {
                 display_str: "",
                 output_width: 0,
+                full_real_width: 12,
                 trim_status: TrimStatus::Trimmed(0, false),
             },
         );
@@ -414,6 +438,7 @@ mod test {
             TrimOutput {
                 display_str: "",
                 output_width: 0,
+                full_real_width: 12,
                 trim_status: TrimStatus::Trimmed(0, true),
             },
         );
@@ -422,6 +447,7 @@ mod test {
             TrimOutput {
                 display_str: "",
                 output_width: 0,
+                full_real_width: 12,
                 trim_status: TrimStatus::Trimmed(1, true),
             },
         );
@@ -430,6 +456,7 @@ mod test {
             TrimOutput {
                 display_str: "日",
                 output_width: 2,
+                full_real_width: 12,
                 trim_status: TrimStatus::Trimmed(0, true),
             },
         );
@@ -438,6 +465,7 @@ mod test {
             TrimOutput {
                 display_str: "日",
                 output_width: 2,
+                full_real_width: 12,
                 trim_status: TrimStatus::Trimmed(1, true),
             },
         );
@@ -446,6 +474,7 @@ mod test {
             TrimOutput {
                 display_str: "日",
                 output_width: 2,
+                full_real_width: 12,
                 trim_status: TrimStatus::Trimmed(0, true),
             },
         );
