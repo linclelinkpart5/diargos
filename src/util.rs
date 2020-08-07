@@ -100,18 +100,17 @@ impl<'a> Iterator for Interpolator<'a> {
 enum State<'a> {
     Head {
         figment_iter: Interpolator<'a>,
-        save_point: Option<SavePoint<'a>>,
         target_width: usize,
         uncontested_width: usize,
     },
     Tail(Interpolator<'a>),
-    Boundary(TrimOutput<'a>),
     Ellipsis(usize),
+    Done,
 }
 
-struct FSA<'a> {
-    offset: usize,
-    state: State<'a>,
+enum FigOrWidth<'a> {
+    Figment(&'a str),
+    Width(usize),
 }
 
 struct MultiFigments<'a> {
@@ -120,32 +119,6 @@ struct MultiFigments<'a> {
 }
 
 impl<'a> MultiFigments<'a> {
-    // pub fn new(values: &'a [&'a str], target_width: usize) -> Self {
-    //     // If the ellipsis is too wide for the target width, do not try and print it.
-    //     let ellipsis_width =
-    //         match ELLIPSIS_STR.width() {
-    //             x if x <= target_width => { x },
-    //             _ => 0,
-    //         }
-    //     ;
-
-    //     // This is the width that is always used by text. It will never
-    //     // be possible to draw the ellipsis, if there is one, in this region.
-    //     // The uncontested width will always be no larger than the target width.
-    //     let uncontested_width = target_width.saturating_sub(ellipsis_width);
-
-    //     let figment_iter = Interpolator::new(values, FIELD_SEP_STR);
-
-    //     Self {
-    //         figment_iter,
-    //         save_point: None,
-    //         target_width,
-    //         uncontested_width,
-
-    //         used_width: 0,
-    //     }
-    // }
-
     pub fn new(values: &'a [&'a str], target_width: usize) -> Self {
         // If the ellipsis is too wide for the target width, do not try and print it.
         let ellipsis_width =
@@ -166,7 +139,6 @@ impl<'a> MultiFigments<'a> {
             offset: 0,
             state: State::Head {
                 figment_iter,
-                save_point: None,
                 target_width,
                 uncontested_width,
             },
@@ -179,7 +151,7 @@ impl<'a> Iterator for MultiFigments<'a> {
 
     fn next (&mut self) -> Option<Self::Item> {
         match self.state {
-            State::Head { ref mut figment_iter, ref mut save_point, target_width, uncontested_width } => {
+            State::Head { ref mut figment_iter, target_width, uncontested_width } => {
                 // Get the next figment from the iterator.
                 let figment = figment_iter.next()?;
 
@@ -190,17 +162,55 @@ impl<'a> Iterator for MultiFigments<'a> {
                     // can fit in the remaining uncontested width.
                     let trim_output = Util::trim_display_str(figment, rem_uc_width);
 
-                    return if save_point.is_none() && trim_output.trim_status.is_trimmed() {
-                        // The remaining width was not enough to fully print this
-                        // figment, so create a save point in case the full string
-                        // overflows the target width later on.
-                        // NOTE: This iterator is advanced past the current figment, but
-                        // the figment still gets processed at this point, so it's OK.
-                        *save_point = Some((self.offset, trim_output, figment_iter.clone()));
+                    if trim_output.trim_status.is_trimmed() {
+                        // Test to see if this and the remaining figments can
+                        // all fit in the total width.
+                        let figment_width = trim_output.full_real_width;
 
-                        self.state = State::Ellipsis(27);
+                        let backup_iter = figment_iter.clone();
 
-                        None
+                        let mut frontier_offset = self.offset;
+                        let frontier_iter =
+                            std::iter::once(FigOrWidth::Width(figment_width))
+                            .chain(figment_iter.map(FigOrWidth::Figment))
+                        ;
+
+                        for frontier_fow in frontier_iter {
+                            let w = match frontier_fow {
+                                FigOrWidth::Figment(f) => f.width(),
+                                FigOrWidth::Width(w) => w,
+                            };
+
+                            frontier_offset += w;
+
+                            if frontier_offset > target_width {
+                                // Expected width overflows target width, emit the trimmed boundary.
+                                let ret = Some((self.offset, trim_output.display_str));
+
+                                // The offset increases by the trimmed length of the boundary figment.
+                                self.offset += trim_output.output_width;
+
+                                // Transition to padding/ellipsis emission.
+                                self.state = State::Ellipsis(trim_output.trim_status.padding());
+
+                                return ret;
+                            }
+                        }
+
+                        // At this point, the current and frontier figments all fit within the
+                        // target width. Emit the untrimmed current figment, and transition to tail
+                        // emission. Note that the figment iterator will be in the correct position
+                        // for the rest of the figments after this one that is being emitted.
+                        let ret = Some((self.offset, figment));
+
+                        // The offset increases by the original length of the boundary figment.
+                        self.offset += figment_width;
+
+                        // Transition to tail emission.
+                        // TODO: May be better to cache calculated widths and iterate that instead?
+                        self.state = State::Tail(backup_iter);
+
+                        ret
                     }
                     else {
                         // No trimming occured, just emit the string and offset.
@@ -208,37 +218,51 @@ impl<'a> Iterator for MultiFigments<'a> {
 
                         // Update the current taken width with the full real width of
                         // the figment.
-                        self.offset = self.offset.saturating_add(trim_output.full_real_width);
+                        self.offset += trim_output.full_real_width;
 
                         ret
-                    };
+                    }
                 }
-
-                None
+                else {
+                    // TODO: What to do in this case?
+                    unreachable!("");
+                }
             },
 
             // Just iterate over the tail until empty, keeping count of the offsets.
             State::Tail(ref mut tail_figment_iter) => {
                 let figment = tail_figment_iter.next()?;
                 let width = figment.width();
+
                 let ret = Some((self.offset, figment));
 
-                self.offset = self.offset.saturating_add(width);
+                self.offset += width;
 
                 ret
             },
 
-            State::Boundary(trim_output) => {
+            State::Ellipsis(ref mut padding) => {
+                let (s, offset_delta) =
+                    if *padding > 0 {
+                        *padding -= 1;
+                        (" ", 1)
+                    }
+                    else {
+                        self.state = State::Done;
+                        (ELLIPSIS_STR, ELLIPSIS_STR.width())
+                    }
+                ;
                 // Emit the trimmed boundary, and then advance to next state.
-                let ret = Some((self.offset, trim_output.display_str));
-                None
+                let ret = Some((self.offset, s));
+
+                self.offset += offset_delta;
+
+                ret
             },
-            _ => None,
+            State::Done => None,
         }
     }
 }
-
-type SavePoint<'a> = (usize, TrimOutput<'a>, Interpolator<'a>);
 
 pub struct Util;
 
