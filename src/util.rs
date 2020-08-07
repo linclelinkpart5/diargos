@@ -10,8 +10,6 @@ use metaflac::Block;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
-use crate::consts::ELLIPSIS_STR;
-use crate::consts::FIELD_SEP_STR;
 use crate::data::Column;
 use crate::data::Record;
 use crate::data::Records;
@@ -115,14 +113,16 @@ enum FigOrWidth<'a> {
 
 struct MultiFigments<'a> {
     offset: usize,
+    ellipsis: &'a str,
+    ellipsis_width: usize,
     state: State<'a>,
 }
 
 impl<'a> MultiFigments<'a> {
-    pub fn new(values: &'a [&'a str], target_width: usize) -> Self {
+    pub fn new(values: &'a [&'a str], target_width: usize, separator: &'a str, ellipsis: &'a str) -> Self {
         // If the ellipsis is too wide for the target width, do not try and print it.
         let ellipsis_width =
-            match ELLIPSIS_STR.width() {
+            match ellipsis.width() {
                 x if x <= target_width => { x },
                 _ => 0,
             }
@@ -133,10 +133,13 @@ impl<'a> MultiFigments<'a> {
         // The uncontested width will always be no larger than the target width.
         let uncontested_width = target_width.saturating_sub(ellipsis_width);
 
-        let figment_iter = Interpolator::new(values, FIELD_SEP_STR);
+        // let figment_iter = Interpolator::new(values, FIELD_SEP_STR);
+        let figment_iter = Interpolator::new(values, separator);
 
         Self {
             offset: 0,
+            ellipsis,
+            ellipsis_width,
             state: State::Head {
                 figment_iter,
                 target_width,
@@ -249,7 +252,7 @@ impl<'a> Iterator for MultiFigments<'a> {
                     }
                     else {
                         self.state = State::Done;
-                        (ELLIPSIS_STR, ELLIPSIS_STR.width())
+                        (self.ellipsis, self.ellipsis_width)
                     }
                 ;
                 // Emit the trimmed boundary, and then advance to next state.
@@ -396,87 +399,15 @@ impl Util {
     }
 
     fn raw_draw(printer: &Printer, values: &[&str], target_width: usize) {
-        // If the ellipsis is too wide for the target width, do not try and print it.
-        let ellipsis_width =
-            match ELLIPSIS_STR.width() {
-                x if x <= target_width => { x },
-                _ => 0,
-            }
-        ;
-
-        // This is the width that is always used by text. It will never
-        // be possible to draw the ellipsis, if there is one, in this region.
-        // The uncontested width will always be no larger than the target width.
-        let uc_width = target_width.saturating_sub(ellipsis_width);
-
-        let mut used_width = 0;
-        let mut save_point = None;
-        let figment_iter = Interpolator::new(values, FIELD_SEP_STR);
-
-        for figment in figment_iter {
-            // Some uncontested width remaining.
-            if let Some(rem_uc_width) = uc_width.checked_sub(used_width) {
-                // Try doing a non-elided trim with the remaining
-                // uncontested width, in order to see if the current figment
-                // can fit in the remaining uncontested width.
-                let trim_output = Self::trim_display_str(figment, rem_uc_width);
-
-                let trim_status = &trim_output.trim_status;
-
-                if save_point.is_none() && trim_status.is_trimmed() {
-                    // The remaining width was not enough to fully print this
-                    // figment. Save the current offset, trim result, and
-                    // iterator state.
-                    save_point = Some((used_width, trim_output, figment_iter.clone()));
-                }
-                else {
-                    // No trimming occured, just print the string.
-                    printer.print((used_width, 0), figment);
-                }
-
-                // In either case, update the current taken width with the full
-                // real width of the figment.
-                used_width = used_width.saturating_add(trim_output.full_real_width);
-            }
-
-            // See if the current taken width now exceeds the target width.
-            if used_width > target_width {
-                // The attempted string overflowed the target width.
-                // Just print out the save point, padding, and ellipsis, and
-                // then return.
-                let (mut offset_x, trim_output, _) = save_point.unwrap();
-
-                // Print the last trimmed string.
-                printer.print((offset_x, 0), trim_output.display_str);
-
-                // Increment the offset and draw the ellipsis, if available.
-                offset_x = offset_x.saturating_add(trim_output.ellipsis_offset());
-
-                if trim_output.trim_status.emit_ellipsis() {
-                    printer.print((offset_x, 0), ELLIPSIS_STR);
-                }
-
-                return;
-            }
-        }
-
-        // At this point, the entire delimited string fits in the target width.
-        // If no save point has been registered, that means the entire string
-        // has already been printed out, so just return. Else, use the saved
-        // figment iterator and starting offset to print out the remaining
-        // unprinted figments.
-        if let Some((mut offset_x, _, backup_iter)) = save_point {
-            for figment in backup_iter {
-                printer.print((offset_x, 0), figment);
-                offset_x = offset_x.saturating_add(figment.width());
-            }
-        }
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+
+    use crate::consts::ELLIPSIS_STR;
+    use crate::consts::FIELD_SEP_STR;
 
     #[test]
     fn trim_display_str_elided() {
@@ -683,5 +614,121 @@ mod test {
             emit_sep: false,
         };
         assert_eq!(i.collect::<Vec<_>>(), vec!["WOW", "|", "COOL", "|", "RAD", "|", "NEAT", "|", "AYY"]);
+    }
+
+    #[test]
+    fn multi_figments() {
+        let mf = MultiFigments::new(&["WOW", "COOL", "RAD", "NEAT", "AYY"], 21, FIELD_SEP_STR, ELLIPSIS_STR);
+        assert_eq!(
+            mf.collect::<Vec<_>>(),
+            vec![
+                (0, "WOW"),
+                (3, FIELD_SEP_STR),
+                (4, "COOL"),
+                (8, FIELD_SEP_STR),
+                (9, "RAD"),
+                (12, FIELD_SEP_STR),
+                (13, "NEAT"),
+                (17, FIELD_SEP_STR),
+                (18, "AYY"),
+            ],
+        );
+
+        let mf = MultiFigments::new(&["WOW", "COOL", "RAD", "NEAT", "AYY"], 50, FIELD_SEP_STR, ELLIPSIS_STR);
+        assert_eq!(
+            mf.collect::<Vec<_>>(),
+            vec![
+                (0, "WOW"),
+                (3, FIELD_SEP_STR),
+                (4, "COOL"),
+                (8, FIELD_SEP_STR),
+                (9, "RAD"),
+                (12, FIELD_SEP_STR),
+                (13, "NEAT"),
+                (17, FIELD_SEP_STR),
+                (18, "AYY"),
+            ],
+        );
+
+        let mf = MultiFigments::new(&["WOW", "COOL", "RAD", "NEAT", "AYY"], 20, FIELD_SEP_STR, ELLIPSIS_STR);
+        assert_eq!(
+            mf.collect::<Vec<_>>(),
+            vec![
+                (0, "WOW"),
+                (3, FIELD_SEP_STR),
+                (4, "COOL"),
+                (8, FIELD_SEP_STR),
+                (9, "RAD"),
+                (12, FIELD_SEP_STR),
+                (13, "NEAT"),
+                (17, FIELD_SEP_STR),
+                (18, "A"),
+                (19, ELLIPSIS_STR),
+            ],
+        );
+
+        let mf = MultiFigments::new(&["0123456789", "0123456789"], 20, "abcdefghijklmnopqrstuvwxyz", ELLIPSIS_STR);
+        assert_eq!(
+            mf.collect::<Vec<_>>(),
+            vec![
+                (0, "0123456789"),
+                (10, "abcdefghi"),
+                (19, ELLIPSIS_STR),
+            ],
+        );
+
+        let mf = MultiFigments::new(&["0123456789", "0123456789"], 21, "|", "...");
+        assert_eq!(
+            mf.collect::<Vec<_>>(),
+            vec![
+                (0, "0123456789"),
+                (10, "|"),
+                (11, "0123456789"),
+            ],
+        );
+
+        let mf = MultiFigments::new(&["0123456789", "0123456789"], 20, "|", "...");
+        assert_eq!(
+            mf.collect::<Vec<_>>(),
+            vec![
+                (0, "0123456789"),
+                (10, "|"),
+                (11, "012345"),
+                (17, "..."),
+            ],
+        );
+
+        let mf = MultiFigments::new(&["0123456789", "0123456789"], 14, "|", "...");
+        assert_eq!(
+            mf.collect::<Vec<_>>(),
+            vec![
+                (0, "0123456789"),
+                (10, "|"),
+                (11, ""),
+                (11, "..."),
+            ],
+        );
+
+        let mf = MultiFigments::new(&["0123456789"], 10, "|", "...");
+        assert_eq!(
+            mf.collect::<Vec<_>>(),
+            vec![
+                (0, "0123456789"),
+            ],
+        );
+
+        let mf = MultiFigments::new(&[""], 10, "|", "...");
+        assert_eq!(
+            mf.collect::<Vec<_>>(),
+            vec![
+                (0, ""),
+            ],
+        );
+
+        let mf = MultiFigments::new(&[], 10, "|", "...");
+        assert_eq!(
+            mf.collect::<Vec<_>>(),
+            vec![],
+        );
     }
 }
