@@ -18,7 +18,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::consts::*;
 use crate::data::ColumnKey;
-use crate::data::Data;
+// use crate::data::Data;
 use crate::model::Model;
 use crate::util::Util;
 use crate::util::MultiFigments;
@@ -70,8 +70,6 @@ impl TagRecordView {
                         .map(|(x, col)| {
                             let y = offset_y;
                             let highlighted = model.is_cursor_at_cell(x, y);
-
-                            let key = &col.key;
 
                             match &col.key {
                                 ColumnKey::Meta(meta_key) => {
@@ -132,9 +130,9 @@ impl TagRecordView {
         }
     }
 
-    pub fn from_data(data: Data) -> Self {
-        Self::new(Model::with_data(data))
-    }
+    // pub fn from_data(data: Data) -> Self {
+    //     Self::new(Model::with_data(data))
+    // }
 
     fn draw_delimited_row<'a>(
         printer: &Printer,
@@ -228,7 +226,7 @@ impl TagRecordView {
                     printer.with_color(
                         color,
                         move |pr| {
-                            for (offset, figment) in multi_figments {
+                            for (offset, figment, figment_kind) in multi_figments {
                                 pr.print((offset_x + offset, offset_y), &figment);
                             }
                             // pr.print((offset_x, offset_y), &display_str);
@@ -244,20 +242,6 @@ impl TagRecordView {
             };
 
             offset_x += content_width;
-        }
-    }
-
-    fn raw_draw(printer: &Printer, values: &[&str], target_width: usize) {
-        let mf = MultiFigments::new(values, target_width, FIELD_SEP_STR, ELLIPSIS_STR);
-
-        for (i, (offset, figment)) in mf.enumerate() {
-            let color =
-                if i % 2 == 0 { ColorStyle::highlight() }
-                else { ColorStyle::primary() }
-            ;
-            printer.with_color(color, |pr| {
-                pr.print((offset, 0), figment);
-            })
         }
     }
 }

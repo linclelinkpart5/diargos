@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::io::Error as IoError;
 use std::path::Path;
 
-use cursive::Printer;
 use globset::Glob;
 use metaflac::Tag;
 use metaflac::Block;
@@ -56,6 +55,12 @@ impl<'a> TrimOutput<'a> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FigmentKind {
+    Val,
+    Sep,
+}
+
 /// Alternates between yielding strings from a slice and a separator string.
 #[derive(Debug, Clone, Copy)]
 struct Interpolator<'a, S: AsRef<str>> {
@@ -77,18 +82,18 @@ impl<'a, S: AsRef<str>> Interpolator<'a, S> {
 }
 
 impl<'a, S: AsRef<str>> Iterator for Interpolator<'a, S> {
-    type Item = &'a str;
+    type Item = (&'a str, FigmentKind);
 
     fn next(&mut self) -> Option<Self::Item> {
         let ret = if self.emit_sep {
             // Only emit separator if there is another value after it.
             self.values.get(self.index)?;
-            self.separator
+            (self.separator, FigmentKind::Sep)
         }
         else {
             let s = self.values.get(self.index)?;
             self.index += 1;
-            s.as_ref()
+            (s.as_ref(), FigmentKind::Val)
         };
 
         self.emit_sep = !self.emit_sep;
@@ -152,13 +157,13 @@ impl<'a, S: AsRef<str>> MultiFigments<'a, S> {
 }
 
 impl<'a, S: AsRef<str> + Clone> Iterator for MultiFigments<'a, S> {
-    type Item = (usize, &'a str);
+    type Item = (usize, &'a str, FigmentKind);
 
     fn next (&mut self) -> Option<Self::Item> {
         match self.state {
             State::Head { ref mut figment_iter, target_width, uncontested_width } => {
                 // Get the next figment from the iterator.
-                let figment = figment_iter.next()?;
+                let (figment, kind) = figment_iter.next()?;
 
                 // Check if there is any uncontested width remaining.
                 if let Some(rem_uc_width) = uncontested_width.checked_sub(self.offset) {
@@ -176,11 +181,11 @@ impl<'a, S: AsRef<str> + Clone> Iterator for MultiFigments<'a, S> {
 
                         let mut frontier_offset = self.offset;
                         let frontier_iter =
-                            std::iter::once(FigOrWidth::Width(figment_width))
-                            .chain(figment_iter.map(FigOrWidth::Figment))
+                            std::iter::once((FigOrWidth::Width(figment_width), kind))
+                            .chain(figment_iter.map(|(f, k)| (FigOrWidth::Figment(f), k)))
                         ;
 
-                        for frontier_fow in frontier_iter {
+                        for (frontier_fow, kind) in frontier_iter {
                             let w = match frontier_fow {
                                 FigOrWidth::Figment(f) => f.width(),
                                 FigOrWidth::Width(w) => w,
@@ -190,7 +195,7 @@ impl<'a, S: AsRef<str> + Clone> Iterator for MultiFigments<'a, S> {
 
                             if frontier_offset > target_width {
                                 // Expected width overflows target width, emit the trimmed boundary.
-                                let ret = Some((self.offset, trim_output.display_str));
+                                let ret = Some((self.offset, trim_output.display_str, kind));
 
                                 // The offset increases by the trimmed length of the boundary figment.
                                 self.offset += trim_output.output_width;
@@ -206,7 +211,7 @@ impl<'a, S: AsRef<str> + Clone> Iterator for MultiFigments<'a, S> {
                         // target width. Emit the untrimmed current figment, and transition to tail
                         // emission. Note that the figment iterator will be in the correct position
                         // for the rest of the figments after this one that is being emitted.
-                        let ret = Some((self.offset, figment));
+                        let ret = Some((self.offset, figment, kind));
 
                         // The offset increases by the original length of the boundary figment.
                         self.offset += figment_width;
@@ -219,7 +224,7 @@ impl<'a, S: AsRef<str> + Clone> Iterator for MultiFigments<'a, S> {
                     }
                     else {
                         // No trimming occured, just emit the string and offset.
-                        let ret = Some((self.offset, figment));
+                        let ret = Some((self.offset, figment, kind));
 
                         // Update the current taken width with the full real width of
                         // the figment.
@@ -236,10 +241,10 @@ impl<'a, S: AsRef<str> + Clone> Iterator for MultiFigments<'a, S> {
 
             // Just iterate over the tail until empty, keeping count of the offsets.
             State::Tail(ref mut tail_figment_iter) => {
-                let figment = tail_figment_iter.next()?;
+                let (figment, kind) = tail_figment_iter.next()?;
                 let width = figment.width();
 
-                let ret = Some((self.offset, figment));
+                let ret = Some((self.offset, figment, kind));
 
                 self.offset += width;
 
@@ -258,7 +263,7 @@ impl<'a, S: AsRef<str> + Clone> Iterator for MultiFigments<'a, S> {
                     }
                 ;
                 // Emit the trimmed boundary, and then advance to next state.
-                let ret = Some((self.offset, s));
+                let ret = Some((self.offset, s, FigmentKind::Val));
 
                 self.offset += offset_delta;
 
@@ -578,7 +583,14 @@ mod test {
             index: 0,
             emit_sep: false,
         };
-        assert_eq!(i.collect::<Vec<_>>(), vec!["HELLO", "////", "WORLD"]);
+        assert_eq!(
+            i.collect::<Vec<_>>(),
+            vec![
+                ("HELLO", FigmentKind::Val),
+                ("////", FigmentKind::Sep),
+                ("WORLD", FigmentKind::Val),
+            ],
+        );
 
         let i = Interpolator {
             values: &["HELLO", "WORLD"],
@@ -586,7 +598,15 @@ mod test {
             index: 0,
             emit_sep: true,
         };
-        assert_eq!(i.collect::<Vec<_>>(), vec!["////","HELLO", "////", "WORLD"]);
+        assert_eq!(
+            i.collect::<Vec<_>>(),
+            vec![
+                ("////", FigmentKind::Sep),
+                ("HELLO", FigmentKind::Val),
+                ("////", FigmentKind::Sep),
+                ("WORLD", FigmentKind::Val),
+            ],
+        );
 
         let i = Interpolator {
             values: &["HELLO", "WORLD"],
@@ -594,7 +614,12 @@ mod test {
             index: 1,
             emit_sep: false,
         };
-        assert_eq!(i.collect::<Vec<_>>(), vec!["WORLD"]);
+        assert_eq!(
+            i.collect::<Vec<_>>(),
+            vec![
+                ("WORLD", FigmentKind::Val),
+            ],
+        );
 
         let i = Interpolator {
             values: &["HELLO", "WORLD"],
@@ -602,7 +627,13 @@ mod test {
             index: 1,
             emit_sep: true,
         };
-        assert_eq!(i.collect::<Vec<_>>(), vec!["////", "WORLD"]);
+        assert_eq!(
+            i.collect::<Vec<_>>(),
+            vec![
+                ("////", FigmentKind::Sep),
+                ("WORLD", FigmentKind::Val),
+            ],
+        );
 
         let i = Interpolator {
             values: &["HELLO", "WORLD"],
@@ -610,7 +641,10 @@ mod test {
             index: 2,
             emit_sep: false,
         };
-        assert_eq!(i.collect::<Vec<&str>>(), Vec::<&str>::new());
+        assert_eq!(
+            i.collect::<Vec<(&str, FigmentKind)>>(),
+            vec![],
+        );
 
         let i = Interpolator {
             values: &["HELLO", "WORLD"],
@@ -618,7 +652,10 @@ mod test {
             index: 2,
             emit_sep: true,
         };
-        assert_eq!(i.collect::<Vec<&str>>(), Vec::<&str>::new());
+        assert_eq!(
+            i.collect::<Vec<(&str, FigmentKind)>>(),
+            vec![],
+        );
 
         let i = Interpolator {
             values: &["WOW", "COOL", "RAD", "NEAT", "AYY"],
@@ -626,7 +663,20 @@ mod test {
             index: 0,
             emit_sep: false,
         };
-        assert_eq!(i.collect::<Vec<_>>(), vec!["WOW", "|", "COOL", "|", "RAD", "|", "NEAT", "|", "AYY"]);
+        assert_eq!(
+            i.collect::<Vec<_>>(),
+            vec![
+                ("WOW", FigmentKind::Val),
+                ("|", FigmentKind::Sep),
+                ("COOL", FigmentKind::Val),
+                ("|", FigmentKind::Sep),
+                ("RAD", FigmentKind::Val),
+                ("|", FigmentKind::Sep),
+                ("NEAT", FigmentKind::Val),
+                ("|", FigmentKind::Sep),
+                ("AYY", FigmentKind::Val),
+            ],
+        );
     }
 
     #[test]
@@ -635,15 +685,15 @@ mod test {
         assert_eq!(
             mf.collect::<Vec<_>>(),
             vec![
-                (0, "WOW"),
-                (3, FIELD_SEP_STR),
-                (4, "COOL"),
-                (8, FIELD_SEP_STR),
-                (9, "RAD"),
-                (12, FIELD_SEP_STR),
-                (13, "NEAT"),
-                (17, FIELD_SEP_STR),
-                (18, "AYY"),
+                (0, "WOW", FigmentKind::Val),
+                (3, FIELD_SEP_STR, FigmentKind::Sep),
+                (4, "COOL", FigmentKind::Val),
+                (8, FIELD_SEP_STR, FigmentKind::Sep),
+                (9, "RAD", FigmentKind::Val),
+                (12, FIELD_SEP_STR, FigmentKind::Sep),
+                (13, "NEAT", FigmentKind::Val),
+                (17, FIELD_SEP_STR, FigmentKind::Sep),
+                (18, "AYY", FigmentKind::Val),
             ],
         );
 
@@ -651,15 +701,15 @@ mod test {
         assert_eq!(
             mf.collect::<Vec<_>>(),
             vec![
-                (0, "WOW"),
-                (3, FIELD_SEP_STR),
-                (4, "COOL"),
-                (8, FIELD_SEP_STR),
-                (9, "RAD"),
-                (12, FIELD_SEP_STR),
-                (13, "NEAT"),
-                (17, FIELD_SEP_STR),
-                (18, "AYY"),
+                (0, "WOW", FigmentKind::Val),
+                (3, FIELD_SEP_STR, FigmentKind::Sep),
+                (4, "COOL", FigmentKind::Val),
+                (8, FIELD_SEP_STR, FigmentKind::Sep),
+                (9, "RAD", FigmentKind::Val),
+                (12, FIELD_SEP_STR, FigmentKind::Sep),
+                (13, "NEAT", FigmentKind::Val),
+                (17, FIELD_SEP_STR, FigmentKind::Sep),
+                (18, "AYY", FigmentKind::Val),
             ],
         );
 
@@ -667,16 +717,16 @@ mod test {
         assert_eq!(
             mf.collect::<Vec<_>>(),
             vec![
-                (0, "WOW"),
-                (3, FIELD_SEP_STR),
-                (4, "COOL"),
-                (8, FIELD_SEP_STR),
-                (9, "RAD"),
-                (12, FIELD_SEP_STR),
-                (13, "NEAT"),
-                (17, FIELD_SEP_STR),
-                (18, "A"),
-                (19, ELLIPSIS_STR),
+                (0, "WOW", FigmentKind::Val),
+                (3, FIELD_SEP_STR, FigmentKind::Sep),
+                (4, "COOL", FigmentKind::Val),
+                (8, FIELD_SEP_STR, FigmentKind::Sep),
+                (9, "RAD", FigmentKind::Val),
+                (12, FIELD_SEP_STR, FigmentKind::Sep),
+                (13, "NEAT", FigmentKind::Val),
+                (17, FIELD_SEP_STR, FigmentKind::Sep),
+                (18, "A", FigmentKind::Val),
+                (19, ELLIPSIS_STR, FigmentKind::Val),
             ],
         );
 
@@ -684,9 +734,9 @@ mod test {
         assert_eq!(
             mf.collect::<Vec<_>>(),
             vec![
-                (0, "0123456789"),
-                (10, "abcdefghi"),
-                (19, ELLIPSIS_STR),
+                (0, "0123456789", FigmentKind::Val),
+                (10, "abcdefghi", FigmentKind::Sep),
+                (19, ELLIPSIS_STR, FigmentKind::Val),
             ],
         );
 
@@ -694,9 +744,9 @@ mod test {
         assert_eq!(
             mf.collect::<Vec<_>>(),
             vec![
-                (0, "0123456789"),
-                (10, "|"),
-                (11, "0123456789"),
+                (0, "0123456789", FigmentKind::Val),
+                (10, "|", FigmentKind::Sep),
+                (11, "0123456789", FigmentKind::Val),
             ],
         );
 
@@ -704,10 +754,10 @@ mod test {
         assert_eq!(
             mf.collect::<Vec<_>>(),
             vec![
-                (0, "0123456789"),
-                (10, "|"),
-                (11, "012345"),
-                (17, "..."),
+                (0, "0123456789", FigmentKind::Val),
+                (10, "|", FigmentKind::Sep),
+                (11, "012345", FigmentKind::Val),
+                (17, "...", FigmentKind::Val),
             ],
         );
 
@@ -715,10 +765,10 @@ mod test {
         assert_eq!(
             mf.collect::<Vec<_>>(),
             vec![
-                (0, "0123456789"),
-                (10, "|"),
-                (11, ""),
-                (11, "..."),
+                (0, "0123456789", FigmentKind::Val),
+                (10, "|", FigmentKind::Sep),
+                (11, "", FigmentKind::Val),
+                (11, "...", FigmentKind::Val),
             ],
         );
 
@@ -726,7 +776,7 @@ mod test {
         assert_eq!(
             mf.collect::<Vec<_>>(),
             vec![
-                (0, "0123456789"),
+                (0, "0123456789", FigmentKind::Val),
             ],
         );
 
@@ -734,7 +784,7 @@ mod test {
         assert_eq!(
             mf.collect::<Vec<_>>(),
             vec![
-                (0, ""),
+                (0, "", FigmentKind::Val),
             ],
         );
 
