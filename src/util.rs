@@ -61,6 +61,12 @@ pub enum FigmentKind {
     Sep,
 }
 
+impl FigmentKind {
+    pub fn is_sep(&self) -> bool {
+        matches!(self, Self::Sep)
+    }
+}
+
 /// Alternates between yielding strings from a slice and a separator string.
 #[derive(Debug, Clone, Copy)]
 struct Interpolator<'a, S: AsRef<str>> {

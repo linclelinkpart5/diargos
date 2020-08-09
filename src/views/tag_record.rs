@@ -223,21 +223,35 @@ impl TagRecordView {
                     // let display_str = trim_output.display_str;
                     // let emit_ellipsis = trim_output.trim_status.emit_ellipsis();
 
-                    printer.with_color(
-                        color,
-                        move |pr| {
-                            for (offset, figment, figment_kind) in multi_figments {
+                    for (offset, figment, figment_kind) in multi_figments {
+                        let used_color =
+                            if figment_kind.is_sep() { ColorStyle::title_primary() }
+                            else { color }
+                        ;
+
+                        printer.with_color(
+                            used_color,
+                            move |pr| {
                                 pr.print((offset_x + offset, offset_y), &figment);
-                            }
-                            // pr.print((offset_x, offset_y), &display_str);
+                            },
+                        );
+                    }
 
-                            // if emit_ellipsis {
-                            //     let ellipsis_offset = trim_output.ellipsis_offset();
+                    // printer.with_color(
+                    //     color,
+                    //     move |pr| {
+                    //         for (offset, figment, figment_kind) in multi_figments {
+                    //             pr.print((offset_x + offset, offset_y), &figment);
+                    //         }
+                    //         // pr.print((offset_x, offset_y), &display_str);
 
-                            //     pr.print((offset_x + ellipsis_offset, offset_y), ELLIPSIS_STR);
-                            // }
-                        },
-                    );
+                    //         // if emit_ellipsis {
+                    //         //     let ellipsis_offset = trim_output.ellipsis_offset();
+
+                    //         //     pr.print((offset_x + ellipsis_offset, offset_y), ELLIPSIS_STR);
+                    //         // }
+                    //     },
+                    // );
                 },
             };
 
