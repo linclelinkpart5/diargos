@@ -10,7 +10,9 @@ use metaflac::Block;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 
+use crate::consts::*;
 use crate::data::Column;
+use crate::data::ColumnKey;
 use crate::data::Record;
 use crate::data::Records;
 
@@ -56,15 +58,15 @@ impl<'a> TrimOutput<'a> {
 
 /// Alternates between yielding strings from a slice and a separator string.
 #[derive(Debug, Clone, Copy)]
-struct Interpolator<'a> {
-    values: &'a [&'a str],
+struct Interpolator<'a, S: AsRef<str>> {
+    values: &'a [S],
     separator: &'a str,
     index: usize,
     emit_sep: bool,
 }
 
-impl<'a> Interpolator<'a> {
-    pub fn new(values: &'a [&'a str], separator: &'a str) -> Self {
+impl<'a, S: AsRef<str>> Interpolator<'a, S> {
+    pub fn new(values: &'a [S], separator: &'a str) -> Self {
         Self {
             values,
             separator,
@@ -74,7 +76,7 @@ impl<'a> Interpolator<'a> {
     }
 }
 
-impl<'a> Iterator for Interpolator<'a> {
+impl<'a, S: AsRef<str>> Iterator for Interpolator<'a, S> {
     type Item = &'a str;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -86,7 +88,7 @@ impl<'a> Iterator for Interpolator<'a> {
         else {
             let s = self.values.get(self.index)?;
             self.index += 1;
-            s
+            s.as_ref()
         };
 
         self.emit_sep = !self.emit_sep;
@@ -95,13 +97,13 @@ impl<'a> Iterator for Interpolator<'a> {
     }
 }
 
-enum State<'a> {
+enum State<'a, S: AsRef<str>> {
     Head {
-        figment_iter: Interpolator<'a>,
+        figment_iter: Interpolator<'a, S>,
         target_width: usize,
         uncontested_width: usize,
     },
-    Tail(Interpolator<'a>),
+    Tail(Interpolator<'a, S>),
     Ellipsis(usize),
     Done,
 }
@@ -111,15 +113,15 @@ enum FigOrWidth<'a> {
     Width(usize),
 }
 
-struct MultiFigments<'a> {
+pub struct MultiFigments<'a, S: AsRef<str>> {
     offset: usize,
     ellipsis: &'a str,
     ellipsis_width: usize,
-    state: State<'a>,
+    state: State<'a, S>,
 }
 
-impl<'a> MultiFigments<'a> {
-    pub fn new(values: &'a [&'a str], target_width: usize, separator: &'a str, ellipsis: &'a str) -> Self {
+impl<'a, S: AsRef<str>> MultiFigments<'a, S> {
+    pub fn new(values: &'a [S], target_width: usize, separator: &'a str, ellipsis: &'a str) -> Self {
         // If the ellipsis is too wide for the target width, do not try and print it.
         let ellipsis_width =
             match ellipsis.width() {
@@ -149,7 +151,7 @@ impl<'a> MultiFigments<'a> {
     }
 }
 
-impl<'a> Iterator for MultiFigments<'a> {
+impl<'a, S: AsRef<str> + Clone> Iterator for MultiFigments<'a, S> {
     type Item = (usize, &'a str);
 
     fn next (&mut self) -> Option<Self::Item> {
@@ -361,7 +363,22 @@ impl Util {
         let column_key = &column.key;
 
         for record in records.iter() {
-            let curr_row_width = record.get(column_key).map(|s| s.width()).unwrap_or(0);
+            let curr_row_width =
+                match &column.key {
+                    ColumnKey::Meta(meta_key) => {
+                        record.get_meta(meta_key).map(|vals| {
+                            let total_sep_width = vals.len().saturating_sub(1) * FIELD_SEP_STR.width();
+                            let total_field_width = vals.iter().map(|s| s.width()).sum::<usize>();
+
+                            total_field_width + total_sep_width
+                        }).unwrap_or(0)
+                    },
+                    ColumnKey::Info(info_key) => {
+                        record.get_info(info_key).map(|s| s.width()).unwrap_or(0)
+                    },
+                }
+            ;
+            // let curr_row_width = record.get(column_key).map(|s| s.width()).unwrap_or(0);
             max_seen = max_seen.max(curr_row_width);
         }
 
@@ -383,8 +400,7 @@ impl Util {
                 for block in tag.blocks() {
                     if let Block::VorbisComment(vc_map) = block {
                         for (key, values) in vc_map.comments.iter() {
-                            let combined_value = values.join("|");
-                            metadata.insert(key.to_string(), combined_value);
+                            metadata.insert(key.to_string(), values.clone());
                         }
                     }
                 }
@@ -396,9 +412,6 @@ impl Util {
         }
 
         Ok(records)
-    }
-
-    fn raw_draw(printer: &Printer, values: &[&str], target_width: usize) {
     }
 }
 
@@ -725,7 +738,7 @@ mod test {
             ],
         );
 
-        let mf = MultiFigments::new(&[], 10, "|", "...");
+        let mf = MultiFigments::new(&[] as &[&String], 10, "|", "...");
         assert_eq!(
             mf.collect::<Vec<_>>(),
             vec![],

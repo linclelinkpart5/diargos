@@ -17,12 +17,15 @@ use cursive::views::ScrollView;
 use unicode_width::UnicodeWidthStr;
 
 use crate::consts::*;
+use crate::data::ColumnKey;
 use crate::data::Data;
 use crate::model::Model;
 use crate::util::Util;
+use crate::util::MultiFigments;
 
 enum Atom<'a> {
-    Text(&'a str, bool),
+    Single(&'a str, bool),
+    Multi(&'a [String], bool),
     Missing(bool),
     Header,
 }
@@ -70,9 +73,19 @@ impl TagRecordView {
 
                             let key = &col.key;
 
-                            match record.get(key) {
-                                None => Atom::Missing(highlighted),
-                                Some(s) => Atom::Text(s, highlighted),
+                            match &col.key {
+                                ColumnKey::Meta(meta_key) => {
+                                    match record.get_meta(meta_key) {
+                                        None => Atom::Missing(highlighted),
+                                        Some(vals) => Atom::Multi(vals, highlighted),
+                                    }
+                                },
+                                ColumnKey::Info(info_key) => {
+                                    match record.get_info(info_key) {
+                                        None => Atom::Missing(highlighted),
+                                        Some(val) => Atom::Single(val, highlighted),
+                                    }
+                                },
                             }
                         })
                         .zip(model.iter_cached_widths())
@@ -167,14 +180,14 @@ impl TagRecordView {
                         COLUMN_HEADER_BAR,
                     );
                 },
-                Atom::Text(original_string, highlighted) => {
+                Atom::Single(value, highlighted) => {
                     let color =
                         if highlighted { ColorStyle::highlight() }
                         else { ColorStyle::primary() }
                     ;
 
                     let trim_output = Util::trim_display_str_elided(
-                        original_string,
+                        value,
                         content_width,
                         ELLIPSIS_STR.width(),
                     );
@@ -184,7 +197,7 @@ impl TagRecordView {
 
                     printer.with_color(
                         color,
-                        |pr| {
+                        move |pr| {
                             pr.print((offset_x, offset_y), &display_str);
 
                             if emit_ellipsis {
@@ -195,9 +208,56 @@ impl TagRecordView {
                         },
                     );
                 },
+                Atom::Multi(values, highlighted) => {
+                    let color =
+                        if highlighted { ColorStyle::highlight() }
+                        else { ColorStyle::primary() }
+                    ;
+
+                    // let trim_output = Util::trim_display_str_elided(
+                    //     original_string,
+                    //     content_width,
+                    //     ELLIPSIS_STR.width(),
+                    // );
+
+                    let multi_figments = MultiFigments::new(values, content_width, FIELD_SEP_STR, ELLIPSIS_STR);
+
+                    // let display_str = trim_output.display_str;
+                    // let emit_ellipsis = trim_output.trim_status.emit_ellipsis();
+
+                    printer.with_color(
+                        color,
+                        move |pr| {
+                            for (offset, figment) in multi_figments {
+                                pr.print((offset_x + offset, offset_y), &figment);
+                            }
+                            // pr.print((offset_x, offset_y), &display_str);
+
+                            // if emit_ellipsis {
+                            //     let ellipsis_offset = trim_output.ellipsis_offset();
+
+                            //     pr.print((offset_x + ellipsis_offset, offset_y), ELLIPSIS_STR);
+                            // }
+                        },
+                    );
+                },
             };
 
             offset_x += content_width;
+        }
+    }
+
+    fn raw_draw(printer: &Printer, values: &[&str], target_width: usize) {
+        let mf = MultiFigments::new(values, target_width, FIELD_SEP_STR, ELLIPSIS_STR);
+
+        for (i, (offset, figment)) in mf.enumerate() {
+            let color =
+                if i % 2 == 0 { ColorStyle::highlight() }
+                else { ColorStyle::primary() }
+            ;
+            printer.with_color(color, |pr| {
+                pr.print((offset, 0), figment);
+            })
         }
     }
 }
@@ -220,7 +280,7 @@ impl View for TagRecordView {
                 .enumerate()
                 .map(|(x, col)| {
                     let highlighted = model.is_cursor_at_column(x);
-                    Atom::Text(&col.title, highlighted)
+                    Atom::Single(&col.title, highlighted)
                 })
                 .zip(model.iter_cached_widths())
             ;

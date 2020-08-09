@@ -76,16 +76,16 @@ pub struct Column {
 }
 
 pub struct Record {
-    pub metadata: HashMap<String, String>,
+    pub metadata: HashMap<String, Vec<String>>,
     pub file_path: PathBuf,
 }
 
 impl Record {
-    pub fn new(metadata: HashMap<String, String>, file_path: PathBuf) -> Self {
+    pub fn new(metadata: HashMap<String, Vec<String>>, file_path: PathBuf) -> Self {
         Self { metadata, file_path }
     }
 
-    pub fn get_meta(&self, meta_key: &str) -> Option<&str> {
+    pub fn get_meta(&self, meta_key: &str) -> Option<&[String]> {
         self.metadata.get(meta_key).map(AsRef::as_ref)
     }
 
@@ -96,12 +96,12 @@ impl Record {
         }
     }
 
-    pub fn get(&self, column_key: &ColumnKey) -> Option<&str> {
-        match column_key {
-            ColumnKey::Meta(ref meta_key) => self.get_meta(meta_key),
-            ColumnKey::Info(ref info_kind) => self.get_info(info_kind),
-        }
-    }
+    // pub fn get<'a>(&'a self, column_key: &ColumnKey) -> Option<OneOrMany<'a>> {
+    //     match column_key {
+    //         ColumnKey::Meta(ref meta_key) => self.get_meta(meta_key).map(OneOrMany::Many),
+    //         ColumnKey::Info(ref info_kind) => self.get_info(info_kind).map(OneOrMany::One),
+    //     }
+    // }
 }
 
 pub type Columns = Vec<Column>;
@@ -124,19 +124,30 @@ impl Data {
         }
     }
 
-    pub fn iter_column<'a>(&'a self, column_key: &'a str) -> IterColumn<'a> {
-        IterColumn(column_key, self.records.iter())
-    }
+    // pub fn iter_column<'a>(&'a self, column_key: &'a str) -> IterColumn<'a> {
+    //     IterColumn(column_key, self.records.iter())
+    // }
 
     pub fn sort_by_column_index(&mut self, column_index: usize, is_descending: bool) {
         if let Some(column) = self.columns.get(column_index) {
-            let column_key = &column.key;
             self.records.sort_by(move |ra, rb| {
-                let o = match (ra.get(column_key), rb.get(column_key)) {
-                    (None, None) => Ordering::Equal,
-                    (None, Some(..)) => Ordering::Less,
-                    (Some(..), None) => Ordering::Greater,
-                    (Some(a), Some(b)) => a.cmp(b),
+                let o = match &column.key {
+                    ColumnKey::Meta(meta_key) => {
+                        match (ra.get_meta(meta_key), rb.get_meta(meta_key)) {
+                            (None, None) => Ordering::Equal,
+                            (None, Some(..)) => Ordering::Less,
+                            (Some(..), None) => Ordering::Greater,
+                            (Some(a), Some(b)) => a.cmp(b),
+                        }
+                    },
+                    ColumnKey::Info(info_key) => {
+                        match (ra.get_info(info_key), rb.get_info(info_key)) {
+                            (None, None) => Ordering::Equal,
+                            (None, Some(..)) => Ordering::Less,
+                            (Some(..), None) => Ordering::Greater,
+                            (Some(a), Some(b)) => a.cmp(b),
+                        }
+                    },
                 };
 
                 if is_descending { o.reverse() } else { o }
@@ -151,16 +162,16 @@ impl Default for Data {
     }
 }
 
-pub struct IterColumn<'a>(&'a str, SliceIter<'a, Record>);
+// pub struct IterColumn<'a>(&'a str, SliceIter<'a, Record>);
 
-impl<'a> Iterator for IterColumn<'a> {
-    type Item = Option<&'a String>;
+// impl<'a> Iterator for IterColumn<'a> {
+//     type Item = Option<&'a String>;
 
-    fn next(&mut self) -> Option<Self::Item> {
-        let record = self.1.next()?;
-        Some(record.metadata.get(self.0))
-    }
-}
+//     fn next(&mut self) -> Option<Self::Item> {
+//         let record = self.1.next()?;
+//         Some(record.metadata.get(self.0))
+//     }
+// }
 
 pub struct IterCache<'a>(SliceIter<'a, usize>);
 
