@@ -6,6 +6,7 @@ use cursive::Printer;
 use cursive::XY;
 use cursive::Rect;
 use cursive::direction::Direction;
+use cursive::event::Callback;
 use cursive::event::Event;
 use cursive::event::EventResult;
 use cursive::event::Key;
@@ -13,6 +14,7 @@ use cursive::theme::ColorStyle;
 use cursive::view::View;
 use cursive::view::scroll::Scroller;
 use cursive::views::Canvas;
+use cursive::views::Dialog;
 use cursive::views::ScrollView;
 use unicode_width::UnicodeWidthStr;
 
@@ -316,6 +318,22 @@ impl View for TagRecordView {
             // let old_cursor = model.cursor;
 
             match event {
+                Event::AltChar('x') => {
+                    let cb = Callback::from_fn(|siv| {
+                        siv.add_layer(
+                            crate::views::field_edit::make(
+                                vec![
+                                    String::from("WOW"),
+                                    String::from("COOL"),
+                                    String::from("NEAT"),
+                                    String::from("RAD"),
+                                ]
+                            )
+                        );
+                    });
+
+                    return EventResult::Consumed(Some(cb))
+                },
                 Event::AltChar('d') => {
                     if let Some(col_idx) = model.cursor.column_index() {
                         model.sort_by_column_index(col_idx, true)

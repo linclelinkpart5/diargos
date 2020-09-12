@@ -53,6 +53,36 @@ fn main() {
 
     let columns = config.columns;
 
+    // use str_macro::str;
+    // use crate::data::Column;
+    // use crate::data::Columns;
+    // use crate::data::ColumnKey;
+    // use crate::data::InfoKind;
+    // use crate::data::Sizing;
+
+    // let columns = vec![
+    //     Column {
+    //         key: ColumnKey::Meta(str!("ARTIST")),
+    //         title: str!("Artist"),
+    //         sizing: Sizing::Fixed(8),
+    //     },
+    //     Column {
+    //         key: ColumnKey::Meta(str!("TITLE")),
+    //         title: str!("Title"),
+    //         sizing: Sizing::Fixed(5),
+    //     },
+    //     Column {
+    //         key: ColumnKey::Meta(str!("ALBUM")),
+    //         title: str!("Album"),
+    //         sizing: Sizing::Auto,
+    //     },
+    //     Column {
+    //         key: ColumnKey::Info(InfoKind::FileName),
+    //         title: str!("File Name"),
+    //         sizing: Sizing::Auto,
+    //     },
+    // ];
+
     let data = Data::with_data(columns, records);
 
     let model = Model::with_data(data);
